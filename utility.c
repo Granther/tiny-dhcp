@@ -1,29 +1,32 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include <time.h>
-#include <netdb.h>
-#include <stdint.h>
-#include <libpq-fe.h>
-#include <math.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <limits.h>
-#include <unistd.h>
-#include <signal.h>
-#include <syslog.h>
-#include "sql.h"
-#include "obj.h" 
-#include "settings.h"
-#include "utility.h"
+#ifndef INCLUDED_H
+    #include "included.h"
+#endif
 
-int u8ToMacStr(uint8_t* macHex, char* str) { // untested
-    if (str == NULL) {
-        fprintf(stderr, "NULL Pointer to string when converting mac addr\n");
-        return 1;
-    }
+#ifndef OBJ_H
+    #include "obj.h"
+#endif
+    
+#ifndef DUO_NODE_H
+    #include "duo_node.h"
+#endif
+
+#ifndef SQL_H
+    #include "sql.h"
+#endif
+
+#ifndef SETTINGS_H
+    #include "settings.h"
+#endif
+
+#ifndef DHCPPACKET_H
+    #include "dhcppacket.h"
+#endif
+
+#ifndef UTILITY_H
+    #include "utility.h"
+#endif
+
+int u8ToMacStr(uint8_t *macHex, char* str) { // untested
 
     sprintf(str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
     macHex[0], macHex[1], macHex[2],
@@ -32,9 +35,27 @@ int u8ToMacStr(uint8_t* macHex, char* str) { // untested
     return 0;
 }
 
+int u8ToStr(uint8_t *list, char *str) {
+
+    for (int i = 0; i < sizeof(list); i++) {
+        sprintf(str + i, "%c", list[i]);
+    }
+
+    return 0;
+}
+
 int u32ToIpStr(uint32_t hex32, char* ip) {
     
-    snprintf(ip, sizeof(ip), "%u", hex32);
+    uint8_t list8[4];
+
+    list8[3] = (hex32 >> 24) & 0xFF;
+    list8[2] = (hex32 >> 16) & 0xFF;
+    list8[1] = (hex32 >> 8) & 0xFF;
+    list8[0] = hex32 & 0xFF;
+
+    sprintf(ip, "%u.%u.%u.%u", list8[0], list8[1], list8[2], list8[3]);
+
+    return 0;
 }
 
 int u8ToIpStr(uint8_t *list, char* str) {
@@ -50,6 +71,16 @@ uint32_t ipStrToU32(char* ip) {
     }
 
     return hex32;
+}
+
+void print_chaddr(uint8_t chaddr[16]) {
+    for (int i = 0; i <= 15; i++) {
+        printf("%x", chaddr[i]);
+    }
+
+    printf("\n");
+
+    return;
 }
 
 int ipStrToU8(char* str, uint8_t* list) {
@@ -153,7 +184,7 @@ uint32_t maskToSubnet(int mask) {
 }
 
 
-uint8_t* readData(DhcpPacket *pack, int ind) {
+/*uint8_t* readData(vanilla_dhcppacket_t *pack, int ind) {
     int len = pack->options[ind + 1];
     uint8_t* opArr = (uint8_t*)malloc(216 * sizeof(uint8_t));
     int j = 0;
@@ -163,7 +194,7 @@ uint8_t* readData(DhcpPacket *pack, int ind) {
     }
 
     return opArr;
-}
+}*/
 
 void cutMac(uint8_t* mac) 
 {

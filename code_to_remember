@@ -1,0 +1,18 @@
+
+        dhcppacket_t *dhcp_pack = (dhcppacket_t*)buf; 
+
+        option_t *op = (option_t*)malloc(sizeof(option_t));
+
+        set_char_val(op, "gooptown");
+
+        uint8_t foo[] = {0x0a, 0x0a, 0x0a};
+
+        set_u8_val(op, foo);
+
+        uint8_t *bar = get_u8_val(op);
+
+        printf("glrop: %s\n", get_char_val(op));
+
+        printf("foobat: %d\n", *bar);
+
+        free(op);

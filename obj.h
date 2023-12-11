@@ -1,23 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <netdb.h>
-#include <stdint.h>
-#include <libpq-fe.h>
-#include <math.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <limits.h>
-#include <unistd.h>
-#include <signal.h>
+#include "included.h"
 
 #ifndef OBJ_H
     #define OBJ_H
@@ -72,31 +53,15 @@
     #define SERVER_IDENT_LEN 0x04
     #define DNS_LEN 0x04
     #define IP_LEN 0x04;
+    #define CLIENT_IDENT_LEN 0x6
+    #define IP_ADDR_LEASE_TIME_LEN 0x4
+    #define TIME_OFFSET_LEN 0x4
+    #define SERVER_NAME_HEX 0x40
 
-    #define SIZE 256;
+    #define TERMINAL_MODE 0
+    #define SERVICE_MODE 1
 
-    typedef struct DhcpPacket { 
-        uint8_t op;            // Operation Code
-        uint8_t htype;         // Hardware Type
-        uint8_t hlen;          // Hardware Address Length
-        uint8_t hops;          // Hops
-        uint32_t xid;          // Transaction ID
-        uint16_t secs;         // Seconds
-        uint16_t flags;        // Flags
-        uint32_t ciaddr;       // Client IP Address
-        uint32_t yiaddr;       // Your IP Address
-        uint32_t siaddr;       // Server IP Address
-        uint32_t giaddr;       // Gateway IP Address
-        uint8_t chaddr[16];    // Client Hardware Address
-        uint8_t sname[64];     // Server Name
-        uint8_t file[128];     // Boot File Name
-        uint8_t options[214];  // DHCP Options (adjust size as needed)
-
-        uint8_t opCodes[16];
-        uint8_t opCodeIndexes[16];
-    } DhcpPacket;
-
-    typedef struct LeasedClient {
+    typedef struct {
         char* leased_ip;
         char* chaddr;
         uint32_t renewal_time;
@@ -115,7 +80,9 @@
         char* router;
         char* subnet;
         char* interface;
+        int mode;
     } Settings;
+
 #endif   
 
 

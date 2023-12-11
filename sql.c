@@ -1,29 +1,30 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <netdb.h>
-#include <stdint.h>
-#include <libpq-fe.h>
-#include <math.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <limits.h>
-#include <unistd.h>
-#include <signal.h>
-#include <syslog.h>
-#include "obj.h"
-#include "settings.h"
-#include "sql.h"
-#include "utility.h"
+#ifndef INCLUDED_H
+    #include "included.h"
+#endif
 
+#ifndef OBJ_H
+    #include "obj.h"
+#endif
+    
+#ifndef DUO_NODE_H
+    #include "duo_node.h"
+#endif
+
+#ifndef SQL_H
+    #include "sql.h"
+#endif
+
+#ifndef SETTINGS_H
+    #include "settings.h"
+#endif
+
+#ifndef DHCPPACKET_H
+    #include "dhcppacket.h"
+#endif
+
+#ifndef UTILITY_H
+    #include "utility.h"
+#endif
 int arrUint8Empty(uint8_t arr[], size_t s);
 
 int 
@@ -180,14 +181,14 @@ checkIfLeased(char* ip) // Checks if IP already has a lease in the leases DB, re
 }
 
 int
-getUnleasedIp(char* unleasedRet)
+getUnleasedIp(char* unleasedRet, int bits)
 {   
     char str[256];
     uint32_t netAddr = roleModel << 8;
     uint32_t ipAddr;
     bool check = false;
     
-    for (int i = 0; i < (1<< (32 - 24)); i++) {
+    for (int i = 2; i < (1 << (32 - bits)) - 2; i++) {
         ipAddr = netAddr + i;
 
         snprintf(str, sizeof(str),"%u.%u.%u.%u", 

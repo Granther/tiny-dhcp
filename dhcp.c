@@ -1,32 +1,30 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <netdb.h>
-#include <stdint.h>
-#include <libpq-fe.h>
-#include <math.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <limits.h>
-#include <unistd.h>
-#include <signal.h>
-#include <syslog.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <pthread.h>
-#include "sql.h"
-#include "obj.h" 
-#include "settings.h"
-#include "utility.h"
+#ifndef INCLUDED_H
+    #include "included.h"
+#endif
+
+#ifndef OBJ_H
+    #include "obj.h"
+#endif
+    
+#ifndef DUO_NODE_H
+    #include "duo_node.h"
+#endif
+
+#ifndef SQL_H
+    #include "sql.h"
+#endif
+
+#ifndef SETTINGS_H
+    #include "settings.h"
+#endif
+
+#ifndef DHCPPACKET_H
+    #include "dhcppacket.h"
+#endif
+
+#ifndef UTILITY_H
+    #include "utility.h"
+#endif
 
 // --- GLOBAL DHCP SETTINGS --- //
 uint8_t RENEWAL_TIME_VAL [16] = {0x00, 0x00, 0x38, 0x40}; // 4 hours
@@ -47,7 +45,6 @@ uint8_t SERVER_IDENT_VAL [16] = {0x0A, 0x0A, 0x3D, 0x2C};
 uint8_t SERVER_NAME_VAL [64] = {0x67, 0x6c, 0x6f, 0x72, 0x70, 0x74, 0x6f, 0x77, 0x6e};
 
 // --- GLOBAL SETTING OPERATION VALUES --- //
-bool archiveDuplicates;
 
 #define BROADCAST_ADDR 0xFFFFFFFF
 
@@ -55,7 +52,7 @@ int opInd = 0;
 uint8_t optionArr[GLOBAL_OPTIONS_LEN];
     
 // --- ARG PARSER --- //
-int readOptions(DhcpPacket *pack);
+int readOptions(DhcpPacket *pack, int sock);
 void info();
 void parser(int argc, char *argv[]);
 void dealFlag(char* flag, char* argList[256]);
@@ -64,7 +61,7 @@ bool isFlag(int argc, char *argv[], int i);
 bool isNullArg(int argc, char *argv[], int i);
 
 // --- MAIN DHCP --- //
-int dhcpMain();
+int dhcpMain(int mode);
 int sendOffer(DhcpPacket *discPack);
 int sendAck(DhcpPacket *reqPack);
 void lease(char* hard_addr, char* str);
@@ -96,20 +93,23 @@ void boilerAck(DhcpPacket *ackPack, DhcpPacket *reqPack);
 bool opCodeExists(DhcpPacket* pack, uint8_t opCode);
 int getFromOptionsRedux(DhcpPacket* pack, uint8_t opCode, uint8_t* retList);
 int getOpLen(DhcpPacket* pack, uint8_t opCode);
-int leapFrogOps(DhcpPacket *pack);
 
 int getMacFromIdent(uint8_t* ident, uint8_t* mac);
 int getSubnetFromMask();
 int getCurrentInterface(char* interfaceGlob);
 bool isCorrectMask(uint32_t addr);
 
-int sendNak(DhcpPacket* reqPack);
+int optionsToStruct(DhcpPacket *pack);
+
+int sendNak(DhcpPacket* reqPack, int sock);
+int file_desc_test(char *test);
 
 // --- SETTING STUFF --- //
 void daemonize();
 void opReader(size_t opCode);
 
 int createRoleModel();
+int get_sockfd();
 
 int getDNS();
 
@@ -118,10 +118,9 @@ int getDNS();
 #define IP_TO_HEX 0
 #define HEX_TO_IP 1
 
+int main(int argc, char *argv[]) 
+{    
 
-int 
-main(int argc, char *argv[]) 
-{       
 	if (argc == 1) 
 	{
 		info();
@@ -130,35 +129,110 @@ main(int argc, char *argv[])
 	{	
 		parser(argc, argv); 
 	}
+    return 0;
 }
 
-int 
-dhcpMain() 
+int get_sockfd() {
+    char **names = NULL;
+    int num_fds;
+    int sockfd;
+
+    sockfd = -1;
+    num_fds = sd_listen_fds_with_names(0, &names);
+    if (num_fds < 0) {
+        perror("sd_listen_fds_with_names");
+        return 1;
+    }
+
+    if (num_fds == 0 || names == NULL) {
+        fprintf(stderr, SD_WARNING "Unable to find FD\n");
+        return -1;
+    }
+
+    fprintf(stderr, SD_NOTICE "FD Names are: \n");
+
+    for (int i = 0; i < num_fds; i++) {
+        fprintf(stderr, SD_NOTICE " %s\n", names[i]);
+
+        if (sd_is_socket_unix(i+SD_LISTEN_FDS_START, -1, SOCK_DGRAM, (const char*)names[i], strlen(names[i])));
+            sockfd = i+SD_LISTEN_FDS_START;
+    }
+
+    free(names);
+
+    return sockfd;
+}
+
+int file_desc_test(char *test) {
+    int sockfd; // we will get this from systemd and it will be foo.socket
+    struct sockaddr_un client; // unix domain socket client address
+    socklen_t addrlen;
+    ssize_t num_bytes; // bytes received from the socket
+    char buf[1024]; // buffer to receive from socket
+
+    fprintf(stderr, SD_NOTICE "foo service started\n");
+
+    sockfd = get_sockfd();
+    if(sockfd == -1)
+    {
+        fprintf(stdout, SD_ERR "Unable to get file descriptor for socket\n");
+        sd_notify(0, "STOPPING=1");
+        return -1;
+    }
+
+    // tell the service manager we're in the ready state
+    sd_notify(0, "READY=1");
+    while(1)
+    {
+        num_bytes = recvfrom(sockfd, buf, 1024, 0, (struct sockaddr*) &client, &addrlen);
+        if(num_bytes == -1)
+        {
+        perror("error receiving from unix domain socket");
+        continue;
+        }
+        buf[num_bytes] = '\0';
+        fprintf(stderr, SD_NOTICE "Received %ld bytes from %s: %s\n", num_bytes, client.sun_path, buf);
+    }
+
+    return 0;
+}
+
+int dhcpMain(int mode) 
 {
+    options_hr_t *ops = (options_hr_t*)malloc(sizeof(options_hr_t));
+
     clearOptionArr();
     
     loadStuff();
 
-    pthread_t thread;
+    int sock;
 
-    int sock = socket(AF_INET, SOCK_DGRAM, 0); // Ipv4, UDP, Default protocol for SOCK_DGRAM 
-
-    if (sock == -1) {
-        perror("socket");
-        return 1;
-    }
-     
     struct sockaddr_in server_addr, client_addr;
 
-    memset(&server_addr, 0, sizeof(server_addr)); // Var in mem, what to write to block, size of block. Makes it NULL
+    if (mode == TERMINAL_MODE) {
+        sock = socket(AF_INET, SOCK_DGRAM, 0); // Ipv4, UDP, Default protocol for SOCK_DGRAM 
+    }
+    else if (mode == SERVICE_MODE) {
+        sock = get_sockfd();
+    }
 
+    if (sock == -1) {
+        fprintf(stdout, SD_ERR "Unable to get file descriptor for socket\n");
+        sd_notify(0, "STOPPING=1");
+        return -1;
+    }
+     
+    memset(&server_addr, 0, sizeof(server_addr)); // Var in mem, what to write to block, size of block. Makes it NULL
     //Set up and bind socket
+
     server_addr.sin_family = AF_INET; // Makes the address type used IPv4
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // Sets the ip to accept connections on any of its interfaces. htonl converts from host byte to network byte
     server_addr.sin_port = htons(SERVER_PORT); // Sets the value to port 67 (DHCP Server port)
 
     bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)); // Binds socket to serveraddr
-    
+
+    //sd_notify(0, "READY=1"); // Notify systemd that we are READY
+
     while(1) {
         socklen_t len = sizeof(client_addr); // Stores size of client address
         char buf[1024]; // Recieved data buffer 
@@ -166,25 +240,83 @@ dhcpMain()
         recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr*)&client_addr, &len);
         // (the socket, where to buffer, buffer size, 0, changes server_addr ro pointer, store size of client addr)
 
-        DhcpPacket *dhcpPacket = (DhcpPacket*)buf; // Cast the buffer to a DHCP packet structure (assuming you have defined the structure)
+        vanilla_dhcp_t *vdhcp_pack = (vanilla_dhcp_t*)buf; // Cast the buffer to a DHCP packet structure (assuming you have defined the structure)
+        init_vanilla_dhcp(vdhcp_pack);
 
         if (dhcpPacket->op != 0) {
-            close(sock);
-            //pthread_create(&thread, NULL, readOptions, dhcpPacket);
-            //pthread_join(thread, NULL);
-            readOptions(dhcpPacket);
+            //close(sock);
 
+            dhcppacket_all_hr *hr = (dhcppacket_all_hr*)malloc(sizeof(dhcppacket_all_hr));
+
+            netToHr(dhcpPacket, hr);
+
+            readout_hr_pack(hr);
+
+            //readOptions(dhcpPacket, sock);
+
+            free(hr);
+
+            return EXIT_SUCCESS;
         }
     }
     close(sock);
     return EXIT_SUCCESS;
 }
 
-int 
-sendOffer(DhcpPacket *discPack) 
-{
+int optionsToStruct(DhcpPacket *pack) {
 
-    loadStuff();
+    getFromOptionsRedux(pack, CLIENT_IDENT_HEX, pack->ops->client_id);
+    getFromOptionsRedux(pack, SERVER_IDENT_HEX, pack->ops->server_id);
+    getFromOptionsRedux(pack, RENEWAL_TIME_HEX, pack->ops->renewal_time);
+    getFromOptionsRedux(pack, REBINDING_TIME_HEX, pack->ops->rebinding_time);
+    getFromOptionsRedux(pack, IP_ADDR_LEASE_TIME_HEX, pack->ops->ip_lease_length);
+    getFromOptionsRedux(pack, DOMAIN_NAME_HEX, pack->ops->domain_name);
+    getFromOptionsRedux(pack, TIME_OFFSET_HEX, pack->ops->time_offset);
+    getFromOptionsRedux(pack, MAX_SIZE_HEX, pack->ops->max_size);
+
+    return 0;
+}
+
+bool decider(DhcpPacket *pack, int intention) {
+
+    //options_t *ops = (options_t*)malloc(sizeof(options_t)); optionsToStruct(pack, ops); 
+
+    // What will kill a connection
+
+    /* DISCOVER
+        
+    */
+
+    switch (intention) {
+        case DHCP_OFFER:
+
+            break;
+        case DHCP_ACK:
+
+            break;
+    }
+}
+
+// Get connection
+// Try too handle connection
+// Add the conn to a queue that removes processes based on TTL
+// Decide what we want to do with that conn using the data we have
+    // We may decide to DROP
+    // Or to continue
+// We can examine past but valid conns in out conn queue
+    // Reasons to drop DISCOVER
+        // We see another DHCP OFFER in the queue
+        // That client is not allowed to ask for an address
+        // The client isnt asking us
+    // Reasons to drop a REQUEST
+        // Another DHCP server sends a valid ACK before we can
+        // That client isnt asking us 
+        // The clientis not allowed 
+
+int sendOffer(DhcpPacket *discPack) 
+{// Recieved data buffer 
+
+    //loadStuff();
 
     clearOptionArr(); // Clear global options array
 
@@ -209,7 +341,7 @@ sendOffer(DhcpPacket *discPack)
     else if (!check)
     {
         printf("%x Is NOT the correct mask\n", ipU32);
-        getUnleasedIp(ipStr); 
+        getUnleasedIp(ipStr, getMaskNum()); 
         ipStrToU8(ipStr, ipU8);
     }
 
@@ -311,10 +443,18 @@ sendOffer(DhcpPacket *discPack)
 
 bool opCodeExists(DhcpPacket* pack, uint8_t opCode) 
 {
-    for (size_t i = 0; i < sizeof(pack->options); i++)
+    /*for (size_t i = 0; i < sizeof(pack->options); i++)
     {
         if (pack->options[i] == opCode)
         {
+            return true;
+        }
+    }*/
+
+    leapFrogOps(pack);
+
+    for (int i = 0; i < sizeof(pack->opCodes); i++) {
+        if (pack->opCodes[i] == opCode) {
             return true;
         }
     }
@@ -358,12 +498,14 @@ int getFromOptionsRedux(DhcpPacket* pack, uint8_t opCode, uint8_t* retList)
     {
         if (!opCodeExists(pack, opCode))
         {
-            return 2;
+            for (int i = 0; i < sizeof(retList); i++) {
+                retList[i] = 0x11;
+            }
         }
 
         if (pack->opCodes[i] == opCode)
         {
-            opCodeInd = pack->opCodeIndexes[i];
+            opCodeInd = getAtIndex(pack->opCodeIndexes, i);
             //printf("opcodeind: %d\n", opCodeInd);
             opCodeValLen = pack->options[opCodeInd + 1]; 
             //printf("opcodevallen: %d\n", opCodeValLen);
@@ -374,31 +516,6 @@ int getFromOptionsRedux(DhcpPacket* pack, uint8_t opCode, uint8_t* retList)
     for (size_t i = opCodeInd + 2; i < opCodeInd + opCodeValLen + 2; i++) 
     {
         retList[p] = pack->options[i];
-        p++;
-    }
-
-    return 0;
-}
-
-int leapFrogOps(DhcpPacket *pack) 
-{
-    int p = 0;
-
-    if (&pack->options == NULL) 
-    {
-        fprintf(stderr, "Error - Empty options array when parsing through op codes\n");
-    }
-
-    for (size_t i = 4; i <= GLOBAL_OPTIONS_LEN - 1;) 
-    {
-        //printf("runninf\n");
-        if ((int)pack->options[i-1] == 0x00 || (int)pack->options[i-1] == 0xFF) 
-        {
-            break;
-        }
-
-        pack->opCodes[p] = pack->options[i]; pack->opCodeIndexes[p] = i;
-        i+= ((int)pack->options[i+1] + 2);
         p++;
     }
 
@@ -437,7 +554,7 @@ sendAck(DhcpPacket *reqPack)
     else if (!check)
     {
         printf("%x Is NOT the correct mask\n", ipU32);
-        getUnleasedIp(ipStr); 
+        getUnleasedIp(ipStr, getMaskNum()); 
         ipStrToU8(ipStr, ipU8);
     }
 
@@ -550,16 +667,59 @@ sendAck(DhcpPacket *reqPack)
     return 0;
 }
 
-int
-sendNak(DhcpPacket* reqPack)
+/*int optionsHtonl(DhcpPacket *pack) {
+    uint8_t options[214];
+    options_t *ops = pack->ops;
+
+    //writeData(NULL, MAGIC_COOKIE_LEN, MAGIC_COOKIE_VAL);
+    writeData(CLIENT_IDENT_HEX, CLIENT_IDENT_LEN, ops->client_id);
+    writeData(SERVER_IDENT_HEX, SERVER_IDENT_LEN, ops->server_id);
+    writeData(RENEWAL_TIME_HEX, RENEWAL_TIME_LEN, ops->renewal_time);
+    writeData(REBINDING_TIME_HEX, REBINDING_TIME_LEN, ops->rebinding_time);
+    writeData(IP_ADDR_LEASE_TIME_HEX, IP_ADDR_LEASE_TIME_LEN, ops->ip_lease_length);
+    writeData(DOMAIN_NAME_HEX, DOMAIN_NAME_LEN, ops->domain_name);
+    writeData(TIME_OFFSET_HEX, TIME_OFFSET_LEN, ops->time_offset);
+    writeData(MAX_SIZE_HEX, MAX_SIZE_LEN, ops->max_size);
+    writeData(SERVER_NAME_HEX, SERVER_IDENT_LEN, ops->server_name);
+
+}
+
+int sendNak(DhcpPacket* reqPack, int sock)
 {
     loadStuff();
 
     clearOptionArr(); // Clear global options array
 
+    DhcpPacket *nakPack = (DhcpPacket*)malloc(sizeof(DhcpPacket));
+
+    struct sockaddr_in src_addr, dest_addr;
+
+    memset(&src_addr, 0, sizeof(src_addr));
+    memset(&dest_addr, 0, sizeof(dest_addr));
+
+    src_addr.sin_family = AF_INET;
+    src_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    src_addr.sin_port = htons(67);
+
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(68);
+    dest_addr.sin_addr.s_addr = htonl(BROADCAST_ADDR);
+
+    if (bind(sock, (struct sockaddr*)&src_addr, sizeof(src_addr)) == -1) {
+        perror("offer bind");
+        close(sock);
+    }
+
+    ssize_t sent_bytes = sendto(sock, nakPack, sizeof(nakPack), 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+
+    if (sent_bytes == -1) {
+        fprintf(stderr, "Problem sending the Nak\n");
+        return 1;
+    }
+
     uint8_t clIdent[getOpLen(reqPack, 0x3D)];
 
-    DhcpPacket nakPack;
+    DhcpPacket *nakPack;
 
     boilerOffer(&nakPack, reqPack); // Write some boiler plate/default options to the packet
 
@@ -575,9 +735,7 @@ sendNak(DhcpPacket* reqPack)
     
     writeCookie(); // Write Magic Cookie to offer packet
     
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-
-    if (sockfd == -1) {
+    if (sock == -1) {
         perror("socket");
         exit(EXIT_FAILURE);
         return 1;
@@ -585,7 +743,7 @@ sendNak(DhcpPacket* reqPack)
 
     int broadcastEnable = 1;
 
-    if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
+    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
         perror("setsockopt (SO_BROADCAST)");
         close(sockfd);
         return 1;
@@ -620,22 +778,22 @@ sendNak(DhcpPacket* reqPack)
     dest_addr.sin_port = htons(68);
     dest_addr.sin_addr.s_addr = htonl(u);
 
-    if (bind(sockfd, (struct sockaddr*)&src_addr, sizeof(src_addr)) == -1) {
+    if (bind(sock, (struct sockaddr*)&src_addr, sizeof(src_addr)) == -1) {
         perror("offer bind");
-        close(sockfd);
+        close(sock);
     }
 
-    ssize_t sentBytes = sendto(sockfd, &nakPack, sizeof(nakPack), 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+    ssize_t sentBytes = sendto(sock, &nakPack, sizeof(nakPack), 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
 
     if (sentBytes == -1) {
         perror("sendto");
-        close(sockfd);
+        close(sock);
     }
 
-    close(sockfd);
+    close(sock);
     printf("\n----- SENT OFFER -----\n\n\n");
     return 0;
-}
+}*/
 
 int 
 handleRelease(DhcpPacket* pack)
@@ -671,7 +829,7 @@ int getOpLen(DhcpPacket* pack, uint8_t opCode)
 
         if (pack->opCodes[i] == opCode)
         {
-            opCodeInd = pack->opCodeIndexes[i];
+            opCodeInd = getAtIndex(pack->opCodeIndexes, i);
             opCodeValLen = pack->options[opCodeInd + 1]; 
             return opCodeValLen;
         }
@@ -686,11 +844,6 @@ long howManyIps(int bitMask) {
     long addrs = pow(2, g);
 
     return addrs;
-}
-
-void sigterm_handler(int signum) {
-    printf("rec siggy!");
-    exit(EXIT_SUCCESS);
 }
 
 void clearOptionArr() {
@@ -717,67 +870,6 @@ void endOpsCombine(DhcpPacket *pack) {
     opInd = 0;
 }
 
-void daemonize() {
-    pid_t pid;
-    
-    /* Fork off the parent process */
-    pid = fork();
-    
-    /* An error occurred */
-    if (pid < 0)
-        exit(EXIT_FAILURE);
-    
-     /* Success: Let the parent terminate */
-    if (pid > 0)
-        exit(EXIT_SUCCESS);
-    
-    /* On success: The child process becomes session leader */
-    if (setsid() < 0)
-        exit(EXIT_FAILURE);
-    
-    /* Catch, ignore and handle signals */
-    /*TODO: Implement a working signal handler */
-    signal(SIGCHLD, SIG_IGN);
-    signal(SIGHUP, SIG_IGN);
-    
-    /* Fork off for the second time*/
-    pid = fork();
-    
-    /* An error occurred */
-    if (pid < 0)
-        exit(EXIT_FAILURE);
-    
-    /* Success: Let the parent terminate */
-    if (pid > 0)
-        exit(EXIT_SUCCESS);
-    
-    /* Set new file permissions */
-    umask(0);
-    
-    /* Change the working directory to the root directory */
-    /* or another appropriated directory */
-    chdir("/");
-    
-    /* Close all open file descriptors */
-    int x;
-    for (x = sysconf(_SC_OPEN_MAX); x>=0; x--)
-    {
-        close (x);
-    }
-    
-    /* Open the log file */
-    openlog ("dhcp", LOG_PID, LOG_DAEMON); 
-
-    /*syslog (LOG_NOTICE, "Dhcp main started.");
-
-    if(signal(SIGTERM, sigterm_handler) == SIG_ERR) {
-        perror("Error registering SIGTERM Handler");
-        return EXIT_FAILURE;
-    }
-
-    syslog (LOG_NOTICE, "Got to options stuff");
-    closelog();*/
-}
 
 void writeIp(uint8_t* ptr, uint8_t ip[16]) {
     for (int i = 0; i < 4; i++) {
@@ -1193,6 +1285,12 @@ void writeData(uint8_t opCode, uint8_t len, uint8_t vals[16]) {
     opInd += length + 2;
 }
 
+int writeDataRedux(uint8_t options[214], uint8_t opCode, uint8_t len, void* value) {
+    uint8_t data[len];
+
+
+}
+
 
 /*void printDiscover(DhcpPacket *pack) {
     printf("Client MAC Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -1216,7 +1314,9 @@ void writeData(uint8_t opCode, uint8_t len, uint8_t vals[16]) {
 }*/
 
 
-int readOptions(DhcpPacket *pack) {
+int readOptions(DhcpPacket *pack, int sock) {
+
+    openlog("glorp DHCP", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
 
     uint8_t mes;
     char reqIp[128];
@@ -1239,8 +1339,9 @@ int readOptions(DhcpPacket *pack) {
     switch(mes) {
         case DISCOVER_HEX:
             fprintf(stdout, "\n\n----- RECIEVED DISCOVER -----\n\n");
+            syslog(LOG_INFO, "REC DISC");
             sendOffer(pack);
-            dhcpMain();
+            //dhcpMain();
             break;
         case ACK_HEX:
             printf("\n\n----- SERVER GOT ACK ----- \n\n");
@@ -1248,35 +1349,38 @@ int readOptions(DhcpPacket *pack) {
             break;
         case OFFER_HEX:
             printf("\n\n----- SERVER GOT OFFER -----\n\n");
-            dhcpMain();
+            //dhcpMain();
             break;
         case REQUEST_HEX:
             fprintf(stdout, "\n\n----- RECIEVED REQUEST -----\n\n");
+            syslog(LOG_INFO, "REC REQ");
             sendAck(pack);
-            dhcpMain();
+            //dhcpMain();
             break;
         case DECLINE_HEX:
             fprintf(stdout, "\n\n----- GOT DENIED -----\n\n");
-            dhcpMain();
+            //dhcpMain();
             break;
         case INFORM_HEX:
             fprintf(stdout, "\n\n----- INFORM -----\n\n");
-            dhcpMain();
+            //dhcpMain();
             break;
         case RELEASE_HEX:
             fprintf(stdout, "\n\n----- RELEASE -----\n\n");
-            dhcpMain();
+            //dhcpMain();
             break;
         case NAK_HEX:
             fprintf(stdout, "\n\n----- NAK -----\n\n");
-            dhcpMain();
+            //dhcpMain();
             break;
         default:
             fprintf(stdout, "\n\n----- UNRECOGNIZED OPCODE %d-----\n\n", mes);
-            //makedhcpMain();
+            //sendNak(pack, sock);
+            //dhcpMain();
             return 0;
     }
-    return 0;
+    closelog();
+    return EXIT_SUCCESS;
 }
 
 
@@ -1313,9 +1417,6 @@ void readRequestList(DhcpPacket *dp, int opInd, int opLen) {
     }
 }
 
-
-// PARSER SHIIIIT //
-
 void dealFlag(char* flag, char* argList[256]) { // Post Parse Flag Processing
 
 	if ((flagEquals(flag, "-s", "--s", "--start")) && argList != NULL) {
@@ -1323,7 +1424,7 @@ void dealFlag(char* flag, char* argList[256]) { // Post Parse Flag Processing
         createSettings();
         settingInit();
         sqlDBConnectTest();
-		dhcpMain();
+		dhcpMain(TERMINAL_MODE);
     } else if ((flagEquals(flag, "-c", "--c", "--start")) && argList != NULL) {
 		createSettings();
     } else if ((flagEquals(flag, "-cs", "--cs", "--start")) && argList != NULL) {

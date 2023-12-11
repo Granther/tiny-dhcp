@@ -1,22 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include <time.h>
-#include <netdb.h>
-#include <stdint.h>
-#include <libpq-fe.h>
-#include <math.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <limits.h>
-#include <unistd.h>
-#include <signal.h>
-#include <syslog.h>
-#include "sql.h"
-#include "obj.h" 
-#include "settings.h"
+#include "included.h"
 
 #ifndef UTILITY_H
     #define UTILITY_H
@@ -30,10 +12,10 @@
     char* mac6ToString(uint8_t macAddress[6]);
     uint8_t getLenWithOpCode(uint8_t options[GLOBAL_OPTIONS_LEN], uint8_t opCode);
     void genHostAddr(const char *sub, int bits);
-    int getUnleasedIp(char* unleasedRet);
     void emptyIt(uint8_t* arrPtr, int len);
 
-    int u8ToMacStr(uint8_t* macHex, char* str);
+    int u8ToMacStr(uint8_t *macHex, char* str);
+    int u8ToStr(uint8_t *list, char *str);
     int u32ToIpStr(uint32_t hex32, char* ip);
     uint32_t ipStrToU32(char* ip);
     int ipStrToU8(char* str, uint8_t* list);
@@ -41,6 +23,7 @@
     void printIp(uint32_t ip);
     uint32_t u8ToU32(uint8_t* list);
     int u8ToIpStr(uint8_t *list, char* str);
+    void print_chaddr(uint8_t chaddr[16]);
 
     void cutMac(uint8_t* mac);
 

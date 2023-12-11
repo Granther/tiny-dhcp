@@ -1,26 +1,30 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <netdb.h>
-#include <stdint.h>
-#include <libpq-fe.h>
-#include <math.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <limits.h>
-#include <unistd.h>
-#include <signal.h>
-#include <syslog.h>
-#include "obj.h"
-#include "settings.h"
+#ifndef INCLUDED_H
+    #include "included.h"
+#endif
+
+#ifndef OBJ_H
+    #include "obj.h"
+#endif
+    
+#ifndef DUO_NODE_H
+    #include "duo_node.h"
+#endif
+
+#ifndef SQL_H
+    #include "sql.h"
+#endif
+
+#ifndef SETTINGS_H
+    #include "settings.h"
+#endif
+
+#ifndef DHCPPACKET_H
+    #include "dhcppacket.h"
+#endif
+
+#ifndef UTILITY_H
+    #include "utility.h"
+#endif
 
 #define MAX_STRING_LENGTH 256
 
@@ -35,7 +39,7 @@ uint8_t serverIdent[16];
 uint32_t roleModel;
 char* networkInterface;
 
-DhcpPacket* lastPackCache;
+//vanilla_dhcppacket_t* lastPackCache;
 
 
 void
@@ -69,6 +73,7 @@ settingInit()
     getValFromSet("router", sqlSet->router);
     getValFromSet("subnet", sqlSet->subnet);
     getValFromSet("interface", sqlSet->interface);
+    sqlSet->mode = TERMINAL_MODE;
 }
 
 int changeSetting(char* argList[256]) { // Not done

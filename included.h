@@ -1,0 +1,36 @@
+#ifndef INCLUDED_H
+    #define INCLUDED_H
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <string.h>
+    #include <unistd.h>
+    #include <stdbool.h>
+    #include <arpa/inet.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <stdbool.h>
+    #include <sys/stat.h>
+    #include <time.h>
+    #include <netdb.h>
+    #include <stdint.h>
+    #include <libpq-fe.h>
+    #include <math.h>
+    #include <dirent.h>
+    #include <ctype.h>
+    #include <limits.h>
+    #include <unistd.h>
+    #include <signal.h>
+    #include <syslog.h>
+    #include <sys/ioctl.h>
+    #include <net/if.h>
+    #include <netinet/in.h>
+    #include <pthread.h>
+    #include <systemd/sd-daemon.h>
+    #include <errno.h>
+    #include <stdlib.h>
+    #include <stdio.h>
+    #include <string.h>
+    #include <sys/socket.h>
+    #include <sys/un.h>
+#endif
+
