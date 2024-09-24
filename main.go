@@ -185,7 +185,7 @@ func handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Con
 	switch message, _ := getMessageTypeOption(dhcp.Options); message {
 	case layers.DHCPMsgTypeDiscover:
 		log.Printf("Got Discover")
-		sendOffer(dhcp_layer, config)
+		sendOffer(packet_slice, config)
 	case layers.DHCPMsgTypeRequest:
 		log.Printf("Got Request")
 	case layers.DHCPMsgTypeOffer:
@@ -229,33 +229,47 @@ func generateAddr() (net.IP) {
 	return net.IP{192, 168, 1, 180}
 }
 
-func sendOffer(DHCPLayer layers.LayerTypeDHCPv4, DHCPPacket net.Packet, c.Configurations) {
-	DHCPMsgTypeOffer
-	DHCPOpReply
-	DHCPOptSubnetMask
-	DHCPOptRouter
-	DHCPOptDNS
-	DHCPOptDomainName
-	DHCPOptBroadcastAddr
-	DHCPOptLeaseTime
-	DHCPOptMessageType
+func sendOffer(packet_slice []byte, config c.Configurations) {
+	// DHCPMsgTypeOffer
+	// DHCPOpReply
+	// DHCPOptSubnetMask
+	// DHCPOptRouter
+	// DHCPOptDNS
+	// DHCPOptDomainName
+	// DHCPOptBroadcastAddr
+	// DHCPOptLeaseTime
+	// DHCPOptMessageType
 
+	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+    ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
+
+	// var srcHardwareAddr net.HardwareAddr 
+
+	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
+	// srcHardwareAddr := ethernetPacket.SrcMAC
 
 	ipLayer := &layers.IPv4{
-		SrcIP: net.Ip{0, 0, 0, 0},
+		SrcIP: net.IP{0, 0, 0, 0},
 		DstIP: generateAddr(),
 	}
 
 	ethernetLayer := &layers.Ethernet{
         SrcMAC: net.ParseMAC(config.Metal.HardwareAddr),
-        DstMAC: net.HardwareAddr{0xBD, 0xBD, 0xBD, 0xBD, 0xBD, 0xBD},
+        DstMAC: ethernetPacket.SrcMAC,
     }
 
+	udpLayer := &layers.UDP{
+        SrcPort: layers.UDPPort(67),
+        DstPort: layers.UDPPort(68),
+    }
+
+	var options gopacket.SerializeOptions
 	buffer := gopacket.NewSerializedBuffer()
 	gopacket.SerializeLayers(buffer, options, 
-
-
+		ipLayer,
+		ethernetLayer,
+		udpLayer,
 		gopacket.Payload(rawbytes),
 	)
-	outgoingPacket := buffer.Bytes()
+	//outgoingPacket := buffer.Bytes()
 }
