@@ -40,10 +40,27 @@ func main() {
 
 	fmt.Printf(config.Server.DNS)
 
-    // Listen for incoming UDP packets on port 67
+	var ip net.IP
+	interfaceName := config.Metal.Interface
+	hardwareAddr, err := net.ParseMAC(config.Metal.HardwareAddr)
+	fmt.Printf(config.Metal.HardwareAddr)
+
+	if interfaceName == "any" {
+		ip = net.IPv4zero
+	} else if interfaceName != "any" {
+		addr, err := getInterfaceIP(interfaceName); if err != nil {
+			log.Fatalf("Error occured when getting the IP for interface")
+		}
+		ip = addr
+	}
+
+	// ha, err := getInterfaceHA(interfaceName)
+	fmt.Printf(hardwareAddr.String())
+
+    // Listen for incoming UDP packets on port 67 on this addr
     addr := net.UDPAddr{
         Port: DHCPServerPort,
-        IP:   net.IPv4zero,
+        IP:   ip,
     }
     
     conn, err := net.ListenUDP("udp", &addr)
@@ -67,23 +84,53 @@ func main() {
         }
         
         // Start goroutine to handle the packet
-        go handleDHCPPacket(buffer[:n], clientAddr)
+        go handleDHCPPacket(buffer[:n], clientAddr, config)
     }
 }
 
-func getInterfaceIP(interface string) (ip net.IP, error) {
-	iface, err := net.InterfaceByName(interface)
+func getInterfaceIP(interfaceName string) (net.IP, error) {
+	var ip net.IP
+
+	iface, err := net.InterfaceByName(interfaceName)
 	if err != nil {
 		log.Fatalf("Failed to get interface: %v", err)
+		return ip, err
 	}
 
-	addr, err := iface.Addrs()
+	addrs, err := iface.Addrs()
 	if err != nil {
 		log.Fatalf("Failed to get addresses from interface: %v", err)
+		return ip, err
 	}
 
 	// Use the first IP address the interface hasw
-	var ip net.IP
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if ok && ipNet.IP.To4() != nil {
+			ip = ipNet.IP
+			break
+		}
+	}
+
+	if ip == nil {
+		log.Fatal("No valid IPv4 address found on interface: %v", interfaceName)
+	}
+
+	return ip, nil
+}
+
+func getInterfaceHA(interfaceName string) (net.HardwareAddr, error) {
+	var hardwareAddr net.HardwareAddr
+
+	iface, err := net.InterfaceByName(interfaceName)
+	if err != nil {
+		log.Fatalf("Failed to get interface: %v", err)
+		return hardwareAddr, err
+	}
+
+	hardwareAddr = iface.HardwareAddr
+
+	return hardwareAddr, nil
 }
 
 func readConfig() (c.Configurations, error) {
@@ -111,7 +158,7 @@ func readConfig() (c.Configurations, error) {
 }
 
 // Function to handle a DHCP packet in a new goroutine
-func handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr) {
+func handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Configurations) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	dhcp_layer := dhcp_packet.Layer(layers.LayerTypeDHCPv4)
 
@@ -138,6 +185,7 @@ func handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr) {
 	switch message, _ := getMessageTypeOption(dhcp.Options); message {
 	case layers.DHCPMsgTypeDiscover:
 		log.Printf("Got Discover")
+		sendOffer(dhcp_layer, config)
 	case layers.DHCPMsgTypeRequest:
 		log.Printf("Got Request")
 	case layers.DHCPMsgTypeOffer:
@@ -177,3 +225,37 @@ func getMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool)
 	return layers.DHCPMsgTypeUnspecified, false
 }
 
+func generateAddr() (net.IP) {
+	return net.IP{192, 168, 1, 180}
+}
+
+func sendOffer(DHCPLayer layers.LayerTypeDHCPv4, DHCPPacket net.Packet, c.Configurations) {
+	DHCPMsgTypeOffer
+	DHCPOpReply
+	DHCPOptSubnetMask
+	DHCPOptRouter
+	DHCPOptDNS
+	DHCPOptDomainName
+	DHCPOptBroadcastAddr
+	DHCPOptLeaseTime
+	DHCPOptMessageType
+
+
+	ipLayer := &layers.IPv4{
+		SrcIP: net.Ip{0, 0, 0, 0},
+		DstIP: generateAddr(),
+	}
+
+	ethernetLayer := &layers.Ethernet{
+        SrcMAC: net.ParseMAC(config.Metal.HardwareAddr),
+        DstMAC: net.HardwareAddr{0xBD, 0xBD, 0xBD, 0xBD, 0xBD, 0xBD},
+    }
+
+	buffer := gopacket.NewSerializedBuffer()
+	gopacket.SerializeLayers(buffer, options, 
+
+
+		gopacket.Payload(rawbytes),
+	)
+	outgoingPacket := buffer.Bytes()
+}

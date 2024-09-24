@@ -7,8 +7,9 @@ type Configurations struct {
 }
 
 type MetalConfigurations struct {
-	Port		int
-	Interface	string
+	Port			int
+	Interface		string
+	HardwareAddr	string
 }
 
 type ServerConfigurations struct {
