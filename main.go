@@ -2,11 +2,12 @@ package main
 
 import (
 	"net"
-	// "fmt"
+	"fmt"
 	"log"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	// "github.com/google/gopacket/pcap"
+	c "gdhcp/config"
+	"github.com/spf13/viper"
 )
 
 type DHCPPacket struct {
@@ -32,6 +33,13 @@ const DHCPServerPort = 67
 const BufferSize = 1024
 
 func main() {
+	config, err := readConfig(); if err != nil {
+		// %v is value in its default format (hope its printable)
+		log.Fatalf("Error parsing config file: %v", err)
+	}
+
+	fmt.Printf(config.Server.DNS)
+
     // Listen for incoming UDP packets on port 67
     addr := net.UDPAddr{
         Port: DHCPServerPort,
@@ -61,6 +69,45 @@ func main() {
         // Start goroutine to handle the packet
         go handleDHCPPacket(buffer[:n], clientAddr)
     }
+}
+
+func getInterfaceIP(interface string) (ip net.IP, error) {
+	iface, err := net.InterfaceByName(interface)
+	if err != nil {
+		log.Fatalf("Failed to get interface: %v", err)
+	}
+
+	addr, err := iface.Addrs()
+	if err != nil {
+		log.Fatalf("Failed to get addresses from interface: %v", err)
+	}
+
+	// Use the first IP address the interface hasw
+	var ip net.IP
+}
+
+func readConfig() (c.Configurations, error) {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+
+	// viper.AutomaticEnv()
+
+	viper.SetConfigType("yml")
+	var config c.Configurations
+
+	if err := viper.ReadInConfig(); err != nil {
+		return config, fmt.Errorf("Error reading config file, %s", err)
+	}
+	
+	// // Set undefined variables
+	// viper.SetDefault("database.dbname", "test_db")
+
+	err := viper.Unmarshal(&config)
+	if err != nil {
+		return config, fmt.Errorf("Error decoding from struct, %s", err)
+	}
+
+	return config, nil
 }
 
 // Function to handle a DHCP packet in a new goroutine
@@ -129,3 +176,4 @@ func getMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool)
 	}
 	return layers.DHCPMsgTypeUnspecified, false
 }
+
