@@ -258,8 +258,13 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 
 	fmt.Println(config.Metal.HardwareAddr)
 
+	srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
+	if err != nil {
+		log.Fatalf("Error occured while parsing server Hardware addr")
+	}
+
 	ethernetLayer := &layers.Ethernet{
-        SrcMAC: net.ParseMAC(config.Metal.HardwareAddr),
+        SrcMAC: srcMac,
 		DstMAC: ethernetPacket.SrcMAC,
     }
 
@@ -293,7 +298,10 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 		fmt.Println(device.Description)
 	}
 
-	handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 67, true, pcap.BlockForever)
+	// Windows interface \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
+	// Linux interface enp0s31f6
+
+	handle, err := pcap.OpenLive("enp0s31f6", 67, true, pcap.BlockForever)
 
 	if err != nil {
 		log.Fatal(err)
