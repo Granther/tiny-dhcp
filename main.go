@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
 	c "gdhcp/config"
 	"github.com/spf13/viper"
@@ -253,9 +254,12 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 		DstIP: generateAddr(),
 	}
 
+	fmt.Println(config.Metal.HardwareAddr)
+
 	ethernetLayer := &layers.Ethernet{
-        SrcMAC: net.ParseMAC(config.Metal.HardwareAddr),
-        DstMAC: ethernetPacket.SrcMAC,
+        //SrcMAC: net.ParseMAC(config.Metal.HardwareAddr),
+        SrcMAC: ethernetPacket.SrcMAC,
+		DstMAC: ethernetPacket.SrcMAC,
     }
 
 	udpLayer := &layers.UDP{
@@ -263,13 +267,23 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
         DstPort: layers.UDPPort(68),
     }
 
-	var options gopacket.SerializeOptions
-	buffer := gopacket.NewSerializedBuffer()
+	options := gopacket.SerializeOptions{}
+	buffer := gopacket.NewSerializeBuffer()
 	gopacket.SerializeLayers(buffer, options, 
 		ipLayer,
 		ethernetLayer,
 		udpLayer,
-		gopacket.Payload(rawbytes),
 	)
-	//outgoingPacket := buffer.Bytes()
+	outgoingPacket := buffer.Bytes()
+
+	handle, err := pcap.OpenLive("enp6s18", 67, true, pcap.BlockForever)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer handle.Close()
+
+	err = handle.WritePacketData(outgoingPacket)
+    if err != nil {
+        log.Fatal(err)
+    }
 }

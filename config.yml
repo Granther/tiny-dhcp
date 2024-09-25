@@ -1,7 +1,7 @@
 metal:
   port: 67
   interface: 'any'
-  hardwareaddr: '04:ea:56:aa:3a:25'
+  hardwareaddr: '26:52:e2:67:4b:02'
 
 server:
   subnet: '255.255.255.0'
