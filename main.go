@@ -259,8 +259,7 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 	fmt.Println(config.Metal.HardwareAddr)
 
 	ethernetLayer := &layers.Ethernet{
-        //SrcMAC: net.ParseMAC(config.Metal.HardwareAddr),
-        SrcMAC: ethernetPacket.SrcMAC,
+        SrcMAC: net.ParseMAC(config.Metal.HardwareAddr),
 		DstMAC: ethernetPacket.SrcMAC,
     }
 
@@ -269,18 +268,12 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
         DstPort: layers.UDPPort(68),
     }
 
-	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeDiscover)})
-    serverIDOption := layers.NewDHCPOption(layers.DHCPOptServerID, net.IPv4(192, 168, 1, 1).To4())
-    leaseTimeOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, []byte{0x00, 0x01, 0x51, 0x80}) // 86400 seconds = 1 day
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
 
     // Collect them into a DHCPOptions slice
     dhcpOptions := layers.DHCPOptions{
         msgTypeOption,
-        serverIDOption,
-        leaseTimeOption,
     }
-
-	var dhcpOptions layers.DHCPOptions 
 	dhcpLayer, _ := constructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
 
 	options := gopacket.SerializeOptions{}
@@ -295,7 +288,12 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 
 	// Just for windows debugging, get all devices and use the first one
 	devices, _ := pcap.FindAllDevs()
-	handle, err := pcap.OpenLive(devices[0].Name, 67, true, pcap.BlockForever)
+	for _, device := range devices {
+		fmt.Println(device.Name)
+		fmt.Println(device.Description)
+	}
+
+	handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 67, true, pcap.BlockForever)
 
 	if err != nil {
 		log.Fatal(err)
@@ -339,7 +337,7 @@ func constructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions laye
 		Secs:         secs, // Make this up for now
 		YourClientIP: offeredIP, 
 		ClientHWAddr: ethernetPacket.SrcMAC,
-		// Options:     DHCPOptions,
+		Options:     DHCPOptions,
 	}
 
 	// Operation:    layers.DHCPOpReply // Type of Bootp reply
