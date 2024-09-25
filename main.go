@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcap"
+	// "github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
 	c "gdhcp/config"
 	"github.com/spf13/viper"
@@ -250,7 +250,6 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 	// srcHardwareAddr := ethernetPacket.SrcMAC
 
 	offeredIP := generateAddr()
-
 	ipLayer := &layers.IPv4{
 		SrcIP: net.IP{0, 0, 0, 0},
 		DstIP: offeredIP,
@@ -273,6 +272,8 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
         DstPort: layers.UDPPort(68),
     }
 
+	udpLayer.SetNetworkLayerForChecksum(ipLayer)
+
 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
 
     // Collect them into a DHCPOptions slice
@@ -283,35 +284,56 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 
 	options := gopacket.SerializeOptions{}
 	buffer := gopacket.NewSerializeBuffer()
-	gopacket.SerializeLayers(buffer, options, 
+	serialErr := gopacket.SerializeLayers(buffer, options, 
 		ipLayer,
 		ethernetLayer,
 		udpLayer,
 		dhcpLayer,
 	)
+	if serialErr != nil {
+		log.Fatalf("Error occured while serializing layers: %v", serialErr)
+	}
+
 	outgoingPacket := buffer.Bytes()
 
-	// Just for windows debugging, get all devices and use the first one
-	devices, _ := pcap.FindAllDevs()
-	for _, device := range devices {
-		fmt.Println(device.Name)
-		fmt.Println(device.Description)
+	addr := fmt.Sprintf("%v:68", offeredIP)
+	clientAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	conn, err := net.DialUDP("udp", nil, clientAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Write(outgoingPacket)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Just for windows debugging, get all devices and use the first one
+	// devices, _ := pcap.FindAllDevs()
+	// for _, device := range devices {
+	// 	fmt.Println(device.Name)
+	// 	fmt.Println(device.Description)
+	// }
 
 	// Windows interface \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
 	// Linux interface enp0s31f6
 
-	handle, err := pcap.OpenLive("enp0s31f6", 67, true, pcap.BlockForever)
+	// handle, err := pcap.OpenLive("enp6s18", 67, true, pcap.BlockForever)
 
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer handle.Close()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer handle.Close()
 
-	err = handle.WritePacketData(outgoingPacket)
-    if err != nil {
-        log.Fatal(err)
-    }
+	// err = handle.WritePacketData(outgoingPacket)
+    // if err != nil {
+    //     log.Fatal(err)
+    // }
 }
 
 func constructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions layers.DHCPOptions, config c.Configurations) (*layers.DHCPv4, error) {
