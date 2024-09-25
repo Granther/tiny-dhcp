@@ -249,9 +249,11 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
 	// srcHardwareAddr := ethernetPacket.SrcMAC
 
+	offeredIP := generateAddr()
+
 	ipLayer := &layers.IPv4{
 		SrcIP: net.IP{0, 0, 0, 0},
-		DstIP: generateAddr(),
+		DstIP: offeredIP,
 	}
 
 	fmt.Println(config.Metal.HardwareAddr)
@@ -267,16 +269,34 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
         DstPort: layers.UDPPort(68),
     }
 
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeDiscover)})
+    serverIDOption := layers.NewDHCPOption(layers.DHCPOptServerID, net.IPv4(192, 168, 1, 1).To4())
+    leaseTimeOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, []byte{0x00, 0x01, 0x51, 0x80}) // 86400 seconds = 1 day
+
+    // Collect them into a DHCPOptions slice
+    dhcpOptions := layers.DHCPOptions{
+        msgTypeOption,
+        serverIDOption,
+        leaseTimeOption,
+    }
+
+	var dhcpOptions layers.DHCPOptions 
+	dhcpLayer, _ := constructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
+
 	options := gopacket.SerializeOptions{}
 	buffer := gopacket.NewSerializeBuffer()
 	gopacket.SerializeLayers(buffer, options, 
 		ipLayer,
 		ethernetLayer,
 		udpLayer,
+		dhcpLayer,
 	)
 	outgoingPacket := buffer.Bytes()
 
-	handle, err := pcap.OpenLive("enp6s18", 67, true, pcap.BlockForever)
+	// Just for windows debugging, get all devices and use the first one
+	devices, _ := pcap.FindAllDevs()
+	handle, err := pcap.OpenLive(devices[0].Name, 67, true, pcap.BlockForever)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -286,4 +306,53 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
     if err != nil {
         log.Fatal(err)
     }
+}
+
+func constructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions layers.DHCPOptions, config c.Configurations) (*layers.DHCPv4, error) {
+	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
+	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+
+	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
+	discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
+
+	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
+	if !ok {
+		log.Fatalf("Error while parsing DHCPv4 layer in packet")
+	} 
+
+	ethernetPacket, ok := discEthLayer.(*layers.Ethernet)
+	if !ok {
+		log.Fatalf("Error while parsing Ethernet layer in packet")
+	} 
+
+	var hardwareLen uint8 = 6
+	var hardwareOpts uint8 = 0
+	xid := lowPacket.Xid
+	secs := lowPacket.Secs
+
+	dhcpLayer := &layers.DHCPv4{
+		Operation:    layers.DHCPOpReply, // Type of Bootp reply
+		HardwareType: layers.LinkTypeEthernet,
+		HardwareLen:  hardwareLen,
+		HardwareOpts: hardwareOpts,
+		Xid:          xid, // Need this from discover
+		Secs:         secs, // Make this up for now
+		YourClientIP: offeredIP, 
+		ClientHWAddr: ethernetPacket.SrcMAC,
+		// Options:     DHCPOptions,
+	}
+
+	// Operation:    layers.DHCPOpReply // Type of Bootp reply
+	// HardwareType: layers.LinkTypeEthernet
+	// HardwareLen  uint8
+	// HardwareOpts uint8
+	// Xid          uint32 // Need this from discover
+	// Secs         uint16 // Make this up for now
+	// Flags        uint16 // Think I can leave this nil
+	// ClientIP     net.IP // Gonna leave blank proabably, its not assigned yet
+	// YourClientIP net.IP 
+	// ClientHWAddr net.HardwareAddr
+	// Options      DHCPOptions
+
+	return dhcpLayer, nil
 }
