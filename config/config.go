@@ -20,4 +20,5 @@ type ServerConfigurations struct {
 	LeaseLen	int
 	IPRange		string
 	ServerAddr	string
+	NumWorkers	int
 }

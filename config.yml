@@ -11,3 +11,4 @@ server:
   dns: '10.10.1.1'
   lease_len: 3000
   iprange: '10.10.1.1-10.10.1.250'
+  numworkers: 10

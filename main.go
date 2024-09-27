@@ -8,13 +8,23 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
 	c "gdhcp/config"
+	// dhcp "gdhcp/dhcp"
 	"github.com/spf13/viper"
 )
 
 type Server struct {
 	conn		*net.UDPConn
+	handle		*pcap.Handle
 	config		c.Configurations
+	workerPool	chan struct{}
+	packetch 	chan packetJob
+	sendch		chan []byte
 	quitch		chan struct{}
+}
+
+type packetJob struct {
+    data        []byte
+    clientAddr  *net.UDPAddr
 }
 
 func NewServer(config c.Configurations) (*Server, error) {
@@ -27,31 +37,116 @@ func NewServer(config c.Configurations) (*Server, error) {
         return nil, fmt.Errorf("Error creating server UDP listener: %v", err)
     }
 
+	inter := "wlp2s0"
+	handle, err := pcap.OpenLive(inter, 1500, false, pcap.BlockForever)
+	if err != nil {
+		return nil, fmt.Errorf("Could not open pcap device: %w", err)
+	}
+
+	numWorkers := config.Server.NumWorkers
 	return &Server{
 		conn:		conn,
+		handle:		handle,
 		config:		config,
+		workerPool:	make(chan struct{}, numWorkers),
+		packetch:	make(chan packetJob, 1000), // Can hold 1000 packets
+		sendch:		make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
 		quitch:		make(chan struct{}),
 	}, nil
 }
 
 func (s *Server) Start() error {
-	for {
+	log.Printf("Starting server...")
+
+	numWorkers := s.config.Server.NumWorkers
+	for i := 0; i < numWorkers; i++ {
+		go s.worker()
+	}
+
+	go s.receivePackets()
+	go s.sendPackets()
+
+	log.Printf("Server is now listening for packets/quitch")
+	// Wait for quit signal
+	<-s.quitch
+
+	// Close connection and channels
+	s.conn.Close()
+	s.handle.Close()
+	close(s.packetch)
+	close(s.workerPool)
+	close(s.sendch)
+	
+	return nil
+}
+
+func (s *Server) receivePackets() {
+    for {
         buffer := make([]byte, 4096)
-        
         n, clientAddr, err := s.conn.ReadFromUDP(buffer)
         if err != nil {
             log.Printf("Error receiving packet: %v", err)
             continue
         }
-
-        go handleDHCPPacket(buffer[:n], clientAddr, s.config)
+        
+        select {
+        case s.packetch <- packetJob{data: buffer[:n], clientAddr: clientAddr}:
+            // Packet added to queue
+        default:
+            // Queue is full, log and drop packet
+            log.Printf("Packet queue full, dropping packet from %v", clientAddr)
+        }
     }
-	// Always close connection
-	defer s.conn.Close()
+}
 
-	// Wait for quit channel, return when done
-	<-s.quitch
+func (s *Server) sendPackets() {
+	// Iterate over sendchannel, send all ready packets
+	for packet := range s.sendch {
+		err := s.sendPacket(packet)
+		if err != nil {
+			log.Fatalf("Error occured while sending ready packet: %v", err)
+		}
+	}
+}
+
+func (s *Server) sendPacket(packet []byte) error {
+	if err := s.handle.WritePacketData(packet); err != nil {
+		return fmt.Errorf("Failed to send packet: %w", err)
+	}
+	fmt.Println("Send packet from sendPacket")
 	return nil
+}
+
+func (s *Server) worker() {
+    for job := range s.packetch {
+        s.workerPool <- struct{}{} 
+        s.handleDHCPPacket(job.data, job.clientAddr, s.config)
+        <-s.workerPool
+    }
+}
+
+func readConfig() (c.Configurations, error) {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+
+	// viper.AutomaticEnv()
+
+	viper.SetConfigType("yml")
+	var config c.Configurations
+
+	if err := viper.ReadInConfig(); err != nil {
+		return config, fmt.Errorf("Error reading config file, %s", err)
+	}
+	
+	// // Set undefined variables
+	// viper.SetDefault("database.dbname", "test_db")
+
+	err := viper.Unmarshal(&config)
+	if err != nil {
+		return config, fmt.Errorf("Error decoding from struct, %s", err)
+	}
+
+	return config, nil
 }
 
 func main() {
@@ -113,32 +208,9 @@ func getInterfaceHA(interfaceName string) (net.HardwareAddr, error) {
 	return hardwareAddr, nil
 }
 
-func readConfig() (c.Configurations, error) {
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-
-	// viper.AutomaticEnv()
-
-	viper.SetConfigType("yml")
-	var config c.Configurations
-
-	if err := viper.ReadInConfig(); err != nil {
-		return config, fmt.Errorf("Error reading config file, %s", err)
-	}
-	
-	// // Set undefined variables
-	// viper.SetDefault("database.dbname", "test_db")
-
-	err := viper.Unmarshal(&config)
-	if err != nil {
-		return config, fmt.Errorf("Error decoding from struct, %s", err)
-	}
-
-	return config, nil
-}
 
 // Function to handle a DHCP packet in a new goroutine
-func handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Configurations) {
+func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Configurations) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	dhcp_layer := dhcp_packet.Layer(layers.LayerTypeDHCPv4)
 
@@ -150,22 +222,10 @@ func handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Con
 
 	dhcp, _ := dhcp_layer.(*layers.DHCPv4)
 
-	// Bootp operation, above DHCP Options
-	switch dhcp.Operation {
-	case layers.DHCPOpRequest:
-		log.Printf("Bootp packet is Request")
-	case layers.DHCPOpReply:
-		log.Printf("Bootp packet is Reply")
-	default:
-		log.Printf("Error, no Operation specified, I should be confused")
-	}
-
-	// message, found := getDHCPOption(dhcp.Options, layers.DHCPOptMessageType)
-
 	switch message, _ := getMessageTypeOption(dhcp.Options); message {
 	case layers.DHCPMsgTypeDiscover:
 		log.Printf("Got Discover")
-		sendOffer(packet_slice, config)
+		s.sendOffer(packet_slice, config)
 	case layers.DHCPMsgTypeRequest:
 		log.Printf("Got Request")
 	case layers.DHCPMsgTypeOffer:
@@ -258,20 +318,10 @@ func constructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions laye
 	return dhcpLayer, nil
 }
 
-func sendOffer(packet_slice []byte, config c.Configurations) {
+func (s *Server) sendOffer(packet_slice []byte, config c.Configurations) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
     ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
 	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
-
-	// inter := "\\Device\\NPF_Loopback" 
-	inter := "\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}"
-	handle, err := pcap.OpenLive(inter, 1500, false, pcap.BlockForever)
-	if err != nil {
-		fmt.Printf("could not open device: %w", err)
-	}
-	defer handle.Close()
-
-	log.Printf("Created pcap handle")
 
 	buf := gopacket.NewSerializeBuffer()
 	// List of layers to later serialize
@@ -329,175 +379,7 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 		return
 	}
 
-	if err := handle.WritePacketData(buf.Bytes()); err != nil {
-		fmt.Printf("failed to send packet: %w", err)
-		return
-	}
-
-	fmt.Printf("Sent Packet")
+	fmt.Printf("Sending packet bytes to sench")
+	s.sendch <- buf.Bytes()
 }
 
-// func sendOffer(packet_slice []byte, config c.Configurations) {
-// 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
-//     ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
-// 	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
-
-// 	broadcastIP := net.IPv4(255, 255, 255, 255)
-// 	offeredIP := generateAddr()
-// 	ipLayer := &layers.IPv4{
-// 		SrcIP: net.ParseIP(config.Server.ServerAddr),
-// 		// Set the destination as broadcast
-// 		DstIP: broadcastIP,
-// 	}
-
-// 	srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
-// 	if err != nil {
-// 		log.Fatalf("Error occured while parsing server Hardware addr")
-// 	}
-
-// 	ethernetLayer := &layers.Ethernet{
-//         SrcMAC: srcMac,
-// 		DstMAC: ethernetPacket.SrcMAC,
-// 		EthernetType: layers.EthernetTypeIPv4,
-//     }
-// 	udpLayer := &layers.UDP{
-//         SrcPort: layers.UDPPort(67),
-//         DstPort: layers.UDPPort(68),
-//     }
-
-// 	udpLayer.SetNetworkLayerForChecksum(ipLayer)
-
-// 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
-
-//     // Collect them into a DHCPOptions slice
-//     dhcpOptions := layers.DHCPOptions{
-//         msgTypeOption,
-//     }
-// 	dhcpLayer, _ := constructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
-
-// 	// Set the UDP layer len
-// 	udpLength := uint16(8 + len(dhcpLayer.Contents))
-// 	udpLayer.Length = udpLength
-
-// 	options := gopacket.SerializeOptions{}
-// 	buffer := gopacket.NewSerializeBuffer()
-// 	serialErr := gopacket.SerializeLayers(buffer, options, 
-// 		ethernetLayer,
-// 		ipLayer,
-// 		udpLayer,
-// 		dhcpLayer,
-// 	)
-// 	if serialErr != nil {
-// 		log.Fatalf("Error occured while serializing layers: %v", serialErr)
-// 	}
-
-// 	outgoingPacket := buffer.Bytes()
-
-// 	conn, err := net.ListenPacket("ip4:udp", "0.0.0.0")
-// 	if err != nil {
-// 		log.Printf("Error creating raw socket for sending offer: %v", err)
-// 		return
-// 	}
-// 	defer conn.Close()
-
-// 	addr := &net.IPAddr{IP: broadcastIP}
-// 	_, err = conn.WriteTo(outgoingPacket, addr)
-// 	if err != nil {
-// 		log.Printf("Error sending packet: %v", err)
-// 		return
-// 	}
-
-// 	log.Printf("DHCP Offer packet sent to %v", broadcastIP.String())
-// 	// addr := fmt.Sprintf("%v:68", offeredIP)
-// 	// clientAddr, err := net.ResolveUDPAddr("udp", addr)
-// 	// if err != nil {
-// 	// 	log.Fatal(err)
-// 	// }
-
-// 	// conn, err := net.DialUDP("udp", nil, clientAddr)
-// 	// if err != nil {
-// 	// 	log.Fatal(err)
-// 	// }
-// 	// defer conn.Close()
-
-// 	// _, err = conn.Write(outgoingPacket)
-// 	// if err != nil {
-// 	// 	log.Fatal(err)
-// 	// }
-
-// 	// Just for windows debugging, get all devices and use the first one
-// 	// devices, _ := pcap.FindAllDevs()
-// 	// for _, device := range devices {
-// 	// 	fmt.Println(device.Name)
-// 	// 	fmt.Println(device.Description)
-// 	// }
-
-// 	// Windows interface \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
-// 	// Linux interface enp0s31f6
-
-// 	// handle, err := pcap.OpenLive("enp6s18", 67, true, pcap.BlockForever)
-
-// 	// if err != nil {
-// 	// 	log.Fatal(err)
-// 	// }
-// 	// defer handle.Close()
-
-// 	// err = handle.WritePacketData(outgoingPacket)
-//     // if err != nil {
-//     //     log.Fatal(err)
-//     // }
-// }
-
-// MAIN
-	// config, err := readConfig(); if err != nil {
-	// 	log.Fatalf("Error parsing config file: %v", err)
-	// }
-
-	// fmt.Printf(config.Server.DNS)
-
-	// var ip net.IP
-	// interfaceName := config.Metal.Interface
-	// hardwareAddr, err := net.ParseMAC(config.Metal.HardwareAddr)
-	// fmt.Printf(config.Metal.HardwareAddr)
-
-	// if interfaceName == "any" {
-	// 	ip = net.IPv4zero
-	// } else if interfaceName != "any" {
-	// 	addr, err := getInterfaceIP(interfaceName); if err != nil {
-	// 		log.Fatalf("Error occured when getting the IP for interface")
-	// 	}
-	// 	ip = addr
-	// }
-
-	// // ha, err := getInterfaceHA(interfaceName)
-	// fmt.Printf(hardwareAddr.String())
-
-    // // Listen for incoming UDP packets on port 67 on this addr
-    // addr := net.UDPAddr{
-    //     Port: config.Server.Port,
-    //     IP:   ip,
-    // }
-    
-    // conn, err := net.ListenUDP("udp", &addr)
-    // if err != nil {
-    //     log.Fatalf("Error listening on UDP port %d: %v", DHCPServerPort, err)
-    // }
-
-	// // Close the connection upon exit even though its an endless loop
-    // defer conn.Close()
-    
-    // // Start main loop to receive packets
-    // for {
-    //     // Buffer to hold incoming packet
-    //     buffer := make([]byte, BufferSize)
-        
-    //     // Receive the UDP packet
-    //     n, clientAddr, err := conn.ReadFromUDP(buffer)
-    //     if err != nil {
-    //         log.Printf("Error receiving packet: %v", err)
-    //         continue
-    //     }
-        
-    //     // Start goroutine to handle the packet
-    //     go handleDHCPPacket(buffer[:n], clientAddr, config)
-    // }
