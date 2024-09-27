@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"github.com/google/gopacket"
-	// "github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
 	c "gdhcp/config"
 	"github.com/spf13/viper"
@@ -230,112 +230,6 @@ func generateAddr() (net.IP) {
 	return net.IP{192, 168, 1, 180}
 }
 
-func sendOffer(packet_slice []byte, config c.Configurations) {
-	// DHCPMsgTypeOffer
-	// DHCPOpReply
-	// DHCPOptSubnetMask
-	// DHCPOptRouter
-	// DHCPOptDNS
-	// DHCPOptDomainName
-	// DHCPOptBroadcastAddr
-	// DHCPOptLeaseTime
-	// DHCPOptMessageType
-
-	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
-    ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
-
-	// var srcHardwareAddr net.HardwareAddr 
-
-	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
-	// srcHardwareAddr := ethernetPacket.SrcMAC
-
-	offeredIP := generateAddr()
-	ipLayer := &layers.IPv4{
-		SrcIP: net.IP{0, 0, 0, 0},
-		DstIP: offeredIP,
-	}
-
-	fmt.Println(config.Metal.HardwareAddr)
-
-	srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
-	if err != nil {
-		log.Fatalf("Error occured while parsing server Hardware addr")
-	}
-
-	ethernetLayer := &layers.Ethernet{
-        SrcMAC: srcMac,
-		DstMAC: ethernetPacket.SrcMAC,
-    }
-
-	udpLayer := &layers.UDP{
-        SrcPort: layers.UDPPort(67),
-        DstPort: layers.UDPPort(68),
-    }
-
-	udpLayer.SetNetworkLayerForChecksum(ipLayer)
-
-	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
-
-    // Collect them into a DHCPOptions slice
-    dhcpOptions := layers.DHCPOptions{
-        msgTypeOption,
-    }
-	dhcpLayer, _ := constructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
-
-	options := gopacket.SerializeOptions{}
-	buffer := gopacket.NewSerializeBuffer()
-	serialErr := gopacket.SerializeLayers(buffer, options, 
-		ipLayer,
-		ethernetLayer,
-		udpLayer,
-		dhcpLayer,
-	)
-	if serialErr != nil {
-		log.Fatalf("Error occured while serializing layers: %v", serialErr)
-	}
-
-	outgoingPacket := buffer.Bytes()
-
-	addr := fmt.Sprintf("%v:68", offeredIP)
-	clientAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	conn, err := net.DialUDP("udp", nil, clientAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
-	_, err = conn.Write(outgoingPacket)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Just for windows debugging, get all devices and use the first one
-	// devices, _ := pcap.FindAllDevs()
-	// for _, device := range devices {
-	// 	fmt.Println(device.Name)
-	// 	fmt.Println(device.Description)
-	// }
-
-	// Windows interface \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
-	// Linux interface enp0s31f6
-
-	// handle, err := pcap.OpenLive("enp6s18", 67, true, pcap.BlockForever)
-
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer handle.Close()
-
-	// err = handle.WritePacketData(outgoingPacket)
-    // if err != nil {
-    //     log.Fatal(err)
-    // }
-}
-
 func constructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions layers.DHCPOptions, config c.Configurations) (*layers.DHCPv4, error) {
 	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
@@ -384,3 +278,193 @@ func constructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions laye
 
 	return dhcpLayer, nil
 }
+
+func sendOffer(packet_slice []byte, config c.Configurations) {
+	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+    ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
+	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
+
+	// inter := "\\Device\\NPF_Loopback" 
+	inter := "\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}"
+	handle, err := pcap.OpenLive(inter, 1500, false, pcap.BlockForever)
+	if err != nil {
+		fmt.Printf("could not open device: %w", err)
+	}
+	defer handle.Close()
+
+	log.Printf("Created pcap handle")
+
+	buf := gopacket.NewSerializeBuffer()
+	// List of layers to later serialize
+	var layersToSerialize []gopacket.SerializableLayer
+
+	srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
+	if err != nil {
+		log.Fatalf("Error occured while parsing server Hardware addr")
+		return
+	}
+	log.Print("Server srcmac: %v", srcMac.String())
+
+	// Create layer and add it to list to serialize
+	ethernetLayer := &layers.Ethernet{
+		SrcMAC: srcMac,
+		DstMAC: ethernetPacket.SrcMAC,
+		EthernetType: layers.EthernetTypeIPv4,
+	}
+	layersToSerialize = append(layersToSerialize, ethernetLayer)
+
+	broadcastIP := net.IPv4(255, 255, 255, 255)
+	offeredIP := generateAddr()
+	log.Printf("broadcastip: %v", broadcastIP.String())
+	log.Printf("offered ip: %v", offeredIP.String())
+
+	ipLayer := &layers.IPv4{
+		Version: 4,
+		TTL: 64,
+		SrcIP: net.ParseIP(config.Server.ServerAddr),
+		DstIP: broadcastIP,
+		Protocol: layers.IPProtocolUDP,
+	}
+	layersToSerialize = append(layersToSerialize, ipLayer)
+
+	udpLayer := &layers.UDP{
+		SrcPort: layers.UDPPort(67),
+		DstPort: layers.UDPPort(68),
+	}
+	udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
+
+	layersToSerialize = append(layersToSerialize, udpLayer)
+
+
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+    // Collect them into a DHCPOptions slice
+    dhcpOptions := layers.DHCPOptions{
+        msgTypeOption,
+    }
+	dhcpLayer, _ := constructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
+	layersToSerialize = append(layersToSerialize, dhcpLayer)
+
+	// Serialize the packet layers into the buffer
+	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}, layersToSerialize...); err != nil {
+		fmt.Printf("error serializing packet: %w", err)
+		return
+	}
+
+	if err := handle.WritePacketData(buf.Bytes()); err != nil {
+		fmt.Printf("failed to send packet: %w", err)
+		return
+	}
+
+	fmt.Printf("Sent Packet")
+}
+
+// func sendOffer(packet_slice []byte, config c.Configurations) {
+// 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+//     ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
+// 	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
+
+// 	broadcastIP := net.IPv4(255, 255, 255, 255)
+// 	offeredIP := generateAddr()
+// 	ipLayer := &layers.IPv4{
+// 		SrcIP: net.ParseIP(config.Server.ServerAddr),
+// 		// Set the destination as broadcast
+// 		DstIP: broadcastIP,
+// 	}
+
+// 	srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
+// 	if err != nil {
+// 		log.Fatalf("Error occured while parsing server Hardware addr")
+// 	}
+
+// 	ethernetLayer := &layers.Ethernet{
+//         SrcMAC: srcMac,
+// 		DstMAC: ethernetPacket.SrcMAC,
+// 		EthernetType: layers.EthernetTypeIPv4,
+//     }
+// 	udpLayer := &layers.UDP{
+//         SrcPort: layers.UDPPort(67),
+//         DstPort: layers.UDPPort(68),
+//     }
+
+// 	udpLayer.SetNetworkLayerForChecksum(ipLayer)
+
+// 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+
+//     // Collect them into a DHCPOptions slice
+//     dhcpOptions := layers.DHCPOptions{
+//         msgTypeOption,
+//     }
+// 	dhcpLayer, _ := constructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
+
+// 	// Set the UDP layer len
+// 	udpLength := uint16(8 + len(dhcpLayer.Contents))
+// 	udpLayer.Length = udpLength
+
+// 	options := gopacket.SerializeOptions{}
+// 	buffer := gopacket.NewSerializeBuffer()
+// 	serialErr := gopacket.SerializeLayers(buffer, options, 
+// 		ethernetLayer,
+// 		ipLayer,
+// 		udpLayer,
+// 		dhcpLayer,
+// 	)
+// 	if serialErr != nil {
+// 		log.Fatalf("Error occured while serializing layers: %v", serialErr)
+// 	}
+
+// 	outgoingPacket := buffer.Bytes()
+
+// 	conn, err := net.ListenPacket("ip4:udp", "0.0.0.0")
+// 	if err != nil {
+// 		log.Printf("Error creating raw socket for sending offer: %v", err)
+// 		return
+// 	}
+// 	defer conn.Close()
+
+// 	addr := &net.IPAddr{IP: broadcastIP}
+// 	_, err = conn.WriteTo(outgoingPacket, addr)
+// 	if err != nil {
+// 		log.Printf("Error sending packet: %v", err)
+// 		return
+// 	}
+
+// 	log.Printf("DHCP Offer packet sent to %v", broadcastIP.String())
+// 	// addr := fmt.Sprintf("%v:68", offeredIP)
+// 	// clientAddr, err := net.ResolveUDPAddr("udp", addr)
+// 	// if err != nil {
+// 	// 	log.Fatal(err)
+// 	// }
+
+// 	// conn, err := net.DialUDP("udp", nil, clientAddr)
+// 	// if err != nil {
+// 	// 	log.Fatal(err)
+// 	// }
+// 	// defer conn.Close()
+
+// 	// _, err = conn.Write(outgoingPacket)
+// 	// if err != nil {
+// 	// 	log.Fatal(err)
+// 	// }
+
+// 	// Just for windows debugging, get all devices and use the first one
+// 	// devices, _ := pcap.FindAllDevs()
+// 	// for _, device := range devices {
+// 	// 	fmt.Println(device.Name)
+// 	// 	fmt.Println(device.Description)
+// 	// }
+
+// 	// Windows interface \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
+// 	// Linux interface enp0s31f6
+
+// 	// handle, err := pcap.OpenLive("enp6s18", 67, true, pcap.BlockForever)
+
+// 	// if err != nil {
+// 	// 	log.Fatal(err)
+// 	// }
+// 	// defer handle.Close()
+
+// 	// err = handle.WritePacketData(outgoingPacket)
+//     // if err != nil {
+//     //     log.Fatal(err)
+//     // }
+// }

@@ -1,10 +1,11 @@
 metal:
   port: 67
   interface: 'any'
-  hardwareaddr: '26:52:e2:67:4b:02'
+  hardwareaddr: 'D8-5E-D3-81-EE-02'
 
 server:
   subnet: '255.255.255.0'
+  serveraddr: '10.10.1.40'
   gateway: '10.10.1.1'
   dns: '10.10.1.1'
   lease_len: 3000

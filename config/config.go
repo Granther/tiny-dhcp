@@ -18,4 +18,5 @@ type ServerConfigurations struct {
 	DNS			string
 	LeaseLen	int
 	IPRange		string
+	ServerAddr	string
 }
