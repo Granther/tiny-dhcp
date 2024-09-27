@@ -4,12 +4,15 @@ import (
 	"net"
 	"fmt"
 	"log"
+	"encoding/binary"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
-	c "gdhcp/config"
-	// dhcp "gdhcp/dhcp"
 	"github.com/spf13/viper"
+
+	c "gdhcp/config"
+	dhcpUtils "gdhcp/dhcp"
 )
 
 type Server struct {
@@ -37,7 +40,7 @@ func NewServer(config c.Configurations) (*Server, error) {
         return nil, fmt.Errorf("Error creating server UDP listener: %v", err)
     }
 
-	inter := "wlp2s0"
+	inter := config.Metal.Interface
 	handle, err := pcap.OpenLive(inter, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w", err)
@@ -56,7 +59,7 @@ func NewServer(config c.Configurations) (*Server, error) {
 }
 
 func (s *Server) Start() error {
-	log.Printf("Starting server...")
+	log.Println("Starting server...")
 
 	numWorkers := s.config.Server.NumWorkers
 	for i := 0; i < numWorkers; i++ {
@@ -66,7 +69,7 @@ func (s *Server) Start() error {
 	go s.receivePackets()
 	go s.sendPackets()
 
-	log.Printf("Server is now listening for packets/quitch")
+	log.Println("Server is now listening for packets/quitch")
 	// Wait for quit signal
 	<-s.quitch
 
@@ -128,18 +131,12 @@ func (s *Server) worker() {
 func readConfig() (c.Configurations, error) {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
-
-	// viper.AutomaticEnv()
-
 	viper.SetConfigType("yml")
 	var config c.Configurations
 
 	if err := viper.ReadInConfig(); err != nil {
 		return config, fmt.Errorf("Error reading config file, %s", err)
 	}
-	
-	// // Set undefined variables
-	// viper.SetDefault("database.dbname", "test_db")
 
 	err := viper.Unmarshal(&config)
 	if err != nil {
@@ -163,52 +160,6 @@ func main() {
 	server.Start()
 }
 
-func getInterfaceIP(interfaceName string) (net.IP, error) {
-	var ip net.IP
-
-	iface, err := net.InterfaceByName(interfaceName)
-	if err != nil {
-		log.Fatalf("Failed to get interface: %v", err)
-		return ip, err
-	}
-
-	addrs, err := iface.Addrs()
-	if err != nil {
-		log.Fatalf("Failed to get addresses from interface: %v", err)
-		return ip, err
-	}
-
-	// Use the first IP address the interface hasw
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if ok && ipNet.IP.To4() != nil {
-			ip = ipNet.IP
-			break
-		}
-	}
-
-	if ip == nil {
-		log.Fatal("No valid IPv4 address found on interface: %v", interfaceName)
-	}
-
-	return ip, nil
-}
-
-func getInterfaceHA(interfaceName string) (net.HardwareAddr, error) {
-	var hardwareAddr net.HardwareAddr
-
-	iface, err := net.InterfaceByName(interfaceName)
-	if err != nil {
-		log.Fatalf("Failed to get interface: %v", err)
-		return hardwareAddr, err
-	}
-
-	hardwareAddr = iface.HardwareAddr
-
-	return hardwareAddr, nil
-}
-
-
 // Function to handle a DHCP packet in a new goroutine
 func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Configurations) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
@@ -219,13 +170,12 @@ func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, 
 		log.Printf("Error, unable to get DHCP packet or layer")
 		return
 	}
-
 	dhcp, _ := dhcp_layer.(*layers.DHCPv4)
 
-	switch message, _ := getMessageTypeOption(dhcp.Options); message {
+	switch message, _ := dhcpUtils.GetMessageTypeOption(dhcp.Options); message {
 	case layers.DHCPMsgTypeDiscover:
 		log.Printf("Got Discover")
-		s.sendOffer(packet_slice, config)
+		s.createOffer(packet_slice, config)
 	case layers.DHCPMsgTypeRequest:
 		log.Printf("Got Request")
 	case layers.DHCPMsgTypeOffer:
@@ -245,86 +195,16 @@ func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, 
 	}
 }
 
-// Get specific option from DHCP options since it is byte slice
-func getDHCPOption(options layers.DHCPOptions, optType layers.DHCPOpt) (*layers.DHCPOption, bool) {
-	for _, option := range options {
-		if option.Type == optType {
-			return &option, true
-		}
-	}
-	return nil, false
-}
-
-func getMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool) {
-	opt, found := getDHCPOption(options, layers.DHCPOptMessageType)
-
-	// If the MessageType option is valid, try to convert 
-	if found && len(opt.Data) > 0 {
-		return layers.DHCPMsgType(opt.Data[0]), true
-	}
-	return layers.DHCPMsgTypeUnspecified, false
-}
-
 func generateAddr() (net.IP) {
 	return net.IP{192, 168, 1, 180}
 }
 
-func constructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions layers.DHCPOptions, config c.Configurations) (*layers.DHCPv4, error) {
-	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
-	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
-
-	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
-	discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
-
-	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
-	if !ok {
-		log.Fatalf("Error while parsing DHCPv4 layer in packet")
-	} 
-
-	ethernetPacket, ok := discEthLayer.(*layers.Ethernet)
-	if !ok {
-		log.Fatalf("Error while parsing Ethernet layer in packet")
-	} 
-
-	var hardwareLen uint8 = 6
-	var hardwareOpts uint8 = 0
-	xid := lowPacket.Xid
-	secs := lowPacket.Secs
-
-	dhcpLayer := &layers.DHCPv4{
-		Operation:    layers.DHCPOpReply, // Type of Bootp reply
-		HardwareType: layers.LinkTypeEthernet,
-		HardwareLen:  hardwareLen,
-		HardwareOpts: hardwareOpts,
-		Xid:          xid, // Need this from discover
-		Secs:         secs, // Make this up for now
-		YourClientIP: offeredIP, 
-		ClientHWAddr: ethernetPacket.SrcMAC,
-		Options:     DHCPOptions,
-	}
-
-	// Operation:    layers.DHCPOpReply // Type of Bootp reply
-	// HardwareType: layers.LinkTypeEthernet
-	// HardwareLen  uint8
-	// HardwareOpts uint8
-	// Xid          uint32 // Need this from discover
-	// Secs         uint16 // Make this up for now
-	// Flags        uint16 // Think I can leave this nil
-	// ClientIP     net.IP // Gonna leave blank proabably, its not assigned yet
-	// YourClientIP net.IP 
-	// ClientHWAddr net.HardwareAddr
-	// Options      DHCPOptions
-
-	return dhcpLayer, nil
-}
-
-func (s *Server) sendOffer(packet_slice []byte, config c.Configurations) {
+func (s *Server) createOffer(packet_slice []byte, config c.Configurations) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
     ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
 	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
 
 	buf := gopacket.NewSerializeBuffer()
-	// List of layers to later serialize
 	var layersToSerialize []gopacket.SerializableLayer
 
 	srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
@@ -332,9 +212,7 @@ func (s *Server) sendOffer(packet_slice []byte, config c.Configurations) {
 		log.Fatalf("Error occured while parsing server Hardware addr")
 		return
 	}
-	log.Print("Server srcmac: %v", srcMac.String())
 
-	// Create layer and add it to list to serialize
 	ethernetLayer := &layers.Ethernet{
 		SrcMAC: srcMac,
 		DstMAC: ethernetPacket.SrcMAC,
@@ -344,8 +222,6 @@ func (s *Server) sendOffer(packet_slice []byte, config c.Configurations) {
 
 	broadcastIP := net.IPv4(255, 255, 255, 255)
 	offeredIP := generateAddr()
-	log.Printf("broadcastip: %v", broadcastIP.String())
-	log.Printf("offered ip: %v", offeredIP.String())
 
 	ipLayer := &layers.IPv4{
 		Version: 4,
@@ -361,16 +237,27 @@ func (s *Server) sendOffer(packet_slice []byte, config c.Configurations) {
 		DstPort: layers.UDPPort(68),
 	}
 	udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
-
 	layersToSerialize = append(layersToSerialize, udpLayer)
 
-
+	var len uint32 = 3000
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, len)
+	// Converts const to byte, then wraps byte in byte slice cause NewDHCPOption takes a byte slice
 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+	subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, []byte(net.ParseIP(config.Server.Subnet).To4()))
+	gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, []byte(net.ParseIP(config.Server.Gateway).To4()))
+	dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.Server.DNS).To4()))
+	leaseLenOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, lenBuf)
+
     // Collect them into a DHCPOptions slice
     dhcpOptions := layers.DHCPOptions{
         msgTypeOption,
+		subnetMaskOption,
+		gatewayOption,
+		dnsOption,
+		leaseLenOption,
     }
-	dhcpLayer, _ := constructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
+	dhcpLayer, _ := dhcpUtils.ConstructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
 	layersToSerialize = append(layersToSerialize, dhcpLayer)
 
 	// Serialize the packet layers into the buffer
@@ -379,7 +266,7 @@ func (s *Server) sendOffer(packet_slice []byte, config c.Configurations) {
 		return
 	}
 
-	fmt.Printf("Sending packet bytes to sench")
+	// Send packet byte slice to sendchannel to be sent 
 	s.sendch <- buf.Bytes()
 }
 
