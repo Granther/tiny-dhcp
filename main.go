@@ -11,82 +11,61 @@ import (
 	"github.com/spf13/viper"
 )
 
-type DHCPPacket struct {
-	Op 		byte		// Operation
-	HType 	byte		//
-	HLen 	byte 		// Mac addr len
-	HOps	byte		//
-	XId		byte		// Transaction id
-    Secs  uint16    	// Seconds elapsed
-    Flags uint16    	// Flags
-    CIAddr net.IP   	// Client IP Address
-    YIAddr net.IP   	// Your (client) IP Address
-    SIAddr net.IP   	// Server IP Address
-    GIAddr net.IP   	// Gateway IP Address
-    CHAddr [16]byte 	// Client hardware address
-    SName  [64]byte 	// Optional server host name
-    File   [128]byte 	// Boot file name
-    Options []byte  	// DHCP options
+type Server struct {
+	conn		*net.UDPConn
+	config		c.Configurations
+	quitch		chan struct{}
 }
 
-// UDP port for DHCP Server
-const DHCPServerPort = 67
-const BufferSize = 1024
-
-func main() {
-	config, err := readConfig(); if err != nil {
-		// %v is value in its default format (hope its printable)
-		log.Fatalf("Error parsing config file: %v", err)
-	}
-
-	fmt.Printf(config.Server.DNS)
-
-	var ip net.IP
-	interfaceName := config.Metal.Interface
-	hardwareAddr, err := net.ParseMAC(config.Metal.HardwareAddr)
-	fmt.Printf(config.Metal.HardwareAddr)
-
-	if interfaceName == "any" {
-		ip = net.IPv4zero
-	} else if interfaceName != "any" {
-		addr, err := getInterfaceIP(interfaceName); if err != nil {
-			log.Fatalf("Error occured when getting the IP for interface")
-		}
-		ip = addr
-	}
-
-	// ha, err := getInterfaceHA(interfaceName)
-	fmt.Printf(hardwareAddr.String())
-
-    // Listen for incoming UDP packets on port 67 on this addr
-    addr := net.UDPAddr{
-        Port: DHCPServerPort,
-        IP:   ip,
-    }
-    
-    conn, err := net.ListenUDP("udp", &addr)
-    if err != nil {
-        log.Fatalf("Error listening on UDP port %d: %v", DHCPServerPort, err)
+func NewServer(config c.Configurations) (*Server, error) {
+	addr := config.Metal.ListenAddr
+	port := config.Metal.Port
+	listenAddr := net.UDPAddr{Port: port, IP: net.ParseIP(addr)}
+	
+	conn, err := net.ListenUDP("udp", &listenAddr)
+	if err != nil {
+        return nil, fmt.Errorf("Error creating server UDP listener: %v", err)
     }
 
-	// Close the connection upon exit even though its an endless loop
-    defer conn.Close()
-    
-    // Start main loop to receive packets
-    for {
-        // Buffer to hold incoming packet
-        buffer := make([]byte, BufferSize)
+	return &Server{
+		conn:		conn,
+		config:		config,
+		quitch:		make(chan struct{}),
+	}, nil
+}
+
+func (s *Server) Start() error {
+	for {
+        buffer := make([]byte, 4096)
         
-        // Receive the UDP packet
-        n, clientAddr, err := conn.ReadFromUDP(buffer)
+        n, clientAddr, err := s.conn.ReadFromUDP(buffer)
         if err != nil {
             log.Printf("Error receiving packet: %v", err)
             continue
         }
-        
-        // Start goroutine to handle the packet
-        go handleDHCPPacket(buffer[:n], clientAddr, config)
+
+        go handleDHCPPacket(buffer[:n], clientAddr, s.config)
     }
+	// Always close connection
+	defer s.conn.Close()
+
+	// Wait for quit channel, return when done
+	<-s.quitch
+	return nil
+}
+
+func main() {
+	config, err := readConfig(); if err != nil {
+		log.Fatalf("Error parsing config file: %v", err)
+		return
+	}
+
+	server, err := NewServer(config)
+	if err != nil {
+		log.Fatalf("Error occured while instantiating server: %v", err)
+		return
+	}
+	server.Start()
 }
 
 func getInterfaceIP(interfaceName string) (net.IP, error) {
@@ -468,3 +447,57 @@ func sendOffer(packet_slice []byte, config c.Configurations) {
 //     //     log.Fatal(err)
 //     // }
 // }
+
+// MAIN
+	// config, err := readConfig(); if err != nil {
+	// 	log.Fatalf("Error parsing config file: %v", err)
+	// }
+
+	// fmt.Printf(config.Server.DNS)
+
+	// var ip net.IP
+	// interfaceName := config.Metal.Interface
+	// hardwareAddr, err := net.ParseMAC(config.Metal.HardwareAddr)
+	// fmt.Printf(config.Metal.HardwareAddr)
+
+	// if interfaceName == "any" {
+	// 	ip = net.IPv4zero
+	// } else if interfaceName != "any" {
+	// 	addr, err := getInterfaceIP(interfaceName); if err != nil {
+	// 		log.Fatalf("Error occured when getting the IP for interface")
+	// 	}
+	// 	ip = addr
+	// }
+
+	// // ha, err := getInterfaceHA(interfaceName)
+	// fmt.Printf(hardwareAddr.String())
+
+    // // Listen for incoming UDP packets on port 67 on this addr
+    // addr := net.UDPAddr{
+    //     Port: config.Server.Port,
+    //     IP:   ip,
+    // }
+    
+    // conn, err := net.ListenUDP("udp", &addr)
+    // if err != nil {
+    //     log.Fatalf("Error listening on UDP port %d: %v", DHCPServerPort, err)
+    // }
+
+	// // Close the connection upon exit even though its an endless loop
+    // defer conn.Close()
+    
+    // // Start main loop to receive packets
+    // for {
+    //     // Buffer to hold incoming packet
+    //     buffer := make([]byte, BufferSize)
+        
+    //     // Receive the UDP packet
+    //     n, clientAddr, err := conn.ReadFromUDP(buffer)
+    //     if err != nil {
+    //         log.Printf("Error receiving packet: %v", err)
+    //         continue
+    //     }
+        
+    //     // Start goroutine to handle the packet
+    //     go handleDHCPPacket(buffer[:n], clientAddr, config)
+    // }

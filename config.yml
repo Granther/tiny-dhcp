@@ -1,5 +1,6 @@
 metal:
   port: 67
+  listenaddr: '0.0.0.0'
   interface: 'any'
   hardwareaddr: 'D8-5E-D3-81-EE-02'
 

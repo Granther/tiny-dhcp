@@ -8,6 +8,7 @@ type Configurations struct {
 
 type MetalConfigurations struct {
 	Port			int
+	ListenAddr		string
 	Interface		string
 	HardwareAddr	string
 }
