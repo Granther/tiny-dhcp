@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"encoding/binary"
+	"os"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
@@ -13,7 +14,10 @@ import (
 
 	c "gdhcp/config"
 	dhcpUtils "gdhcp/dhcp"
+	deviceUtils "gdhcp/device"
 )
+
+
 
 type Server struct {
 	conn		*net.UDPConn
@@ -31,9 +35,13 @@ type packetJob struct {
 }
 
 func NewServer(config c.Configurations) (*Server, error) {
-	addr := config.Metal.ListenAddr
-	port := config.Metal.Port
-	listenAddr := net.UDPAddr{Port: port, IP: net.ParseIP(addr)}
+	// addr := config.Metal.ListenAddr
+	// listenAddr := net.UDPAddr{Port: 67, IP: net.ParseIP(addr)}
+	listenAddr, err := deviceUtils(config.Metal.Interface)
+	if err != nil {
+		log.Fatalf("Error occured while creating listen address struct, please review the interface configuration: %w", err)
+		os.Exit(1)
+	}
 	
 	conn, err := net.ListenUDP("udp", &listenAddr)
 	if err != nil {

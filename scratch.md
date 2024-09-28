@@ -24,4 +24,8 @@
 ### Request List
 - Write the config to a working datastructure
 - If any packet contains a request list, read it completely and see if we can answer it and build the packet in accordance with it
-- 
+
+### Leases
+- What happens on the server when a lease expires?
+- Do I run a job that periodically checks the status of all leases?
+- What if a host is disconnected, has its lease expired, a new device sends discover and gets its IP? We dont want that
