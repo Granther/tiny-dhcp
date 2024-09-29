@@ -29,3 +29,7 @@
 - What happens on the server when a lease expires?
 - Do I run a job that periodically checks the status of all leases?
 - What if a host is disconnected, has its lease expired, a new device sends discover and gets its IP? We dont want that
+
+### Parsing complex config
+- Make function to parse each different kind of data
+- Some data is in a list so maybe switch to json
