@@ -1,0 +1,27 @@
+{
+    "server": {
+        "port": 100,
+        "listen_interface": "any",
+        "num_workers": 10
+    },
+    "dhcp": {
+        "subnet_mask": "255.255.255.0",
+        "router": [
+            "192.168.1.1"
+        ],
+        "time_server": [],
+        "name_server": [],
+        "dns_server": [],
+        "log_server": [],
+        "lease_len": 30000,
+        "hostname": "gdhcp",
+        "domain_name": "local",
+        "ip_forwarding": true,
+        "datagram_mtu": 1500,
+        "default_ttl": 254,
+        "tcp_ttl": 254,
+        "broadcase_add": "255.255.255.255",
+        "router_discovery": true,
+        "ntp_server": []
+    }
+}
