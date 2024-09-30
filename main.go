@@ -43,14 +43,15 @@ func NewServer(config c.Config) (*Server, error) {
 		os.Exit(1)
 	}
 
-	listenAddr, err := deviceUtils.GetUDPAddr(iface)
+	serverIP, err := deviceUtils.GetUDPAddr(iface)
 	if err != nil {
 		log.Fatalf("Error occured while creating listen address struct, please review the interface configuration: %w", err)
 		os.Exit(1)
 	}
 	
-	nlistenAddr := net.UDPAddr{IP: net.IP{255, 255, 255, 255},  Port: 67}
-	conn, err := net.ListenUDP("udp", &nlistenAddr)
+	// Listen on all IPs
+	listenAddr := net.UDPAddr{IP: net.IP{0, 0, 0, 0},  Port: 67}
+	conn, err := net.ListenUDP("udp", &listenAddr)
 	if err != nil {
         return nil, fmt.Errorf("Error creating server UDP listener: %v", err)
     }
@@ -59,6 +60,7 @@ func NewServer(config c.Config) (*Server, error) {
 	// Windows interface: \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
 	// handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
 
+	// Create handle for responding to requests later on
 	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w", err)
@@ -73,7 +75,7 @@ func NewServer(config c.Config) (*Server, error) {
 	return &Server{
 		conn:		conn,
 		handle:		handle,
-		serverIP:	listenAddr.IP,
+		serverIP:	serverIP.IP,
 		serverMAC:	iface.HardwareAddr,
 		config:		config,
 		optionsMap: optionsMap,
@@ -244,25 +246,7 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
 	layersToSerialize = append(layersToSerialize, udpLayer)
 
-	// Converts const to byte, then wraps byte in byte slice cause NewDHCPOption takes a byte slice
-	// msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
-	// // subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, subnet)
-	// gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, s.optionsMap[layers.DHCPOptRouter].ToBytes())
-	// // dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.DHCP.DNSServer).To4()))
-	// leaseLenOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
-
-    // Collect them into a DHCPOptions slice
-
-	// dhcpOptions := options.ReadRequestList(dhcpLayer)
-
-    // dhcpOptions := layers.DHCPOptions{
-    //     msgTypeOption,
-	// 	// subnetMaskOption,
-	// 	gatewayOption,
-	// 	// dnsOption,
-	// 	leaseLenOption,
-    // }
-	dhcpLayer, _ := dhcpUtils.ConstructOfferLayer(packet_slice, offeredIP, config) // Returns pointer to what was affected
+	dhcpLayer, _ := s.ConstructOfferLayer(packet_slice, offeredIP) // Returns pointer to what was affected
 	layersToSerialize = append(layersToSerialize, dhcpLayer)
 
 	// Serialize the packet layers into the buffer
@@ -274,6 +258,86 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	// Send packet byte slice to sendchannel to be sent 
 	s.sendch <- buf.Bytes()
 }
+
+func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*layers.DHCPv4, error) {
+	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
+	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+
+	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
+	discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
+
+	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
+	if !ok {
+		log.Fatalf("Error while parsing DHCPv4 layer in packet")
+	} 
+
+	dhcpOptions, ok := s.ReadRequestList(lowPacket)
+	if !ok {
+		log.Println("Request list does not exist in Discover")
+	}
+
+	// optionsEnd := layers.NewDHCPOption(layers.DHCPOptEnd, 0)
+
+	// dhcpOptions = append(dhcpOptions, msgTypeOption)
+	// dhcpOptions = append(dhcpOptions, dhcpServerIP)
+	// dhcpOptions = append(*dhcpOptions, optionsEnd)
+
+	ethernetPacket, ok := discEthLayer.(*layers.Ethernet)
+	if !ok {
+		log.Fatalf("Error while parsing Ethernet layer in packet")
+	} 
+
+	var hardwareLen uint8 = 6
+	var hardwareOpts uint8 = 0
+	xid := lowPacket.Xid
+	secs := lowPacket.Secs
+
+	dhcpLayer := &layers.DHCPv4{
+		Operation:    layers.DHCPOpReply, // Type of Bootp reply
+		HardwareType: layers.LinkTypeEthernet,
+		HardwareLen:  hardwareLen,
+		HardwareOpts: hardwareOpts,
+		Xid:          xid, // Need this from discover
+		Secs:         secs, // Make this up for now
+		YourClientIP: offeredIP, 
+		ClientHWAddr: ethernetPacket.SrcMAC,
+		Options:     *dhcpOptions,
+	}
+
+	return dhcpLayer, nil
+}
+
+func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
+	// Get RequestParams Option from layer.Options
+	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
+	if !ok {
+		return nil, false
+	}
+
+	dhcpOptions := layers.DHCPOptions{}
+	// Iterate over Request List, get option requested 
+	for _, req := range requestList.Data {
+		if s.optionsMap[layers.DHCPOpt(req)] == nil {
+			continue
+		}
+		r := s.optionsMap[layers.DHCPOpt(req)].ToBytes()
+		if r == nil {
+			continue
+		}
+
+		op := layers.NewDHCPOption(layers.DHCPOpt(req), r) 
+		dhcpOptions = append(dhcpOptions, op)
+	}
+
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
+	dhcpOptions = append(dhcpOptions, msgTypeOption)
+	dhcpOptions = append(dhcpOptions, dhcpServerIP)
+
+	// We return a pointer so we can append other things later, such as opt 255
+	return &dhcpOptions, true
+}
+
 
 // func readConfig() (c.Configur, error) {
 	// 	viper.SetConfigName("config")
@@ -292,3 +356,22 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	
 	// 	return config, nil
 	// }
+
+	// Converts const to byte, then wraps byte in byte slice cause NewDHCPOption takes a byte slice
+	// msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+	// // subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, subnet)
+	// gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, s.optionsMap[layers.DHCPOptRouter].ToBytes())
+	// // dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.DHCP.DNSServer).To4()))
+	// leaseLenOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
+
+    // Collect them into a DHCPOptions slice
+
+	// dhcpOptions := options.ReadRequestList(dhcpLayer)
+
+    // dhcpOptions := layers.DHCPOptions{
+    //     msgTypeOption,
+	// 	// subnetMaskOption,
+	// 	gatewayOption,
+	// 	// dnsOption,
+	// 	leaseLenOption,
+    // }

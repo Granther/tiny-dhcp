@@ -6,9 +6,9 @@ import (
 
 
 	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket"
+	// "github.com/google/gopacket"
 	
-	c "gdhcp/config"
+	// c "gdhcp/config"
 )
 
 func GetDHCPOption(options layers.DHCPOptions, optType layers.DHCPOpt) (*layers.DHCPOption, bool) {
@@ -28,61 +28,6 @@ func GetMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool)
 		return layers.DHCPMsgType(opt.Data[0]), true
 	}
 	return layers.DHCPMsgTypeUnspecified, false
-}
-
-func ConstructOfferLayer(packet_slice []byte, offeredIP net.IP, config c.Config) (*layers.DHCPv4, error) {
-	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
-	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
-
-	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
-	discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
-
-	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
-	if !ok {
-		log.Fatalf("Error while parsing DHCPv4 layer in packet")
-	} 
-
-	ReadRequestList(lowPacket)
-
-	ethernetPacket, ok := discEthLayer.(*layers.Ethernet)
-	if !ok {
-		log.Fatalf("Error while parsing Ethernet layer in packet")
-	} 
-
-	var hardwareLen uint8 = 6
-	var hardwareOpts uint8 = 0
-	xid := lowPacket.Xid
-	secs := lowPacket.Secs
-
-	dhcpLayer := &layers.DHCPv4{
-		Operation:    layers.DHCPOpReply, // Type of Bootp reply
-		HardwareType: layers.LinkTypeEthernet,
-		HardwareLen:  hardwareLen,
-		HardwareOpts: hardwareOpts,
-		Xid:          xid, // Need this from discover
-		Secs:         secs, // Make this up for now
-		YourClientIP: offeredIP, 
-		ClientHWAddr: ethernetPacket.SrcMAC,
-		// Options:     dhcpOptions,
-	}
-
-	return dhcpLayer, nil
-}
-
-func ReadRequestList(layer *layers.DHCPv4) error {
-
-	for option, _ := range layer.Options {
-		log.Println(option)
-	}
-
-	log.Println("Reading request list")
-	// log.Println(layer.Options)
-
-	// for option := range layer.DHCPOptions {
-	// 	log.Println("Option found")
-	// }
-
-	return nil
 }
 
 func GetInterfaceIP(interfaceName string) (net.IP, error) {

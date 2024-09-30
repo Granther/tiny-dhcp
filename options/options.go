@@ -2,9 +2,9 @@ package options
 
 import (
 	// "log"
-	"fmt"
+	// "fmt"
 	"net"
-	"strings"
+	// "strings"
 	"encoding/binary"
 
 	"github.com/google/gopacket/layers"
@@ -84,8 +84,18 @@ func (ip IPAddress) ToBytes() []byte {
 
 type IPAddressSlice []string
 func (ipSlice IPAddressSlice) ToBytes() []byte {
-	slice := []string(ipSlice)
-    return []byte(strings.Join(slice, ""))
+	if len(ipSlice) == 0 {
+		return nil
+	}
+
+	buf := []byte{}
+	for _, ip := range ipSlice {
+		parsedIP := net.ParseIP(ip).To4()
+		if parsedIP != nil {
+			buf = append(buf, parsedIP...)
+		}
+	}
+	return buf
 }
 
 type Int32 uint32
@@ -125,10 +135,9 @@ func (str String) ToBytes() []byte {
 	return []byte(str)
 }
 
-func GetClasslessSR(config c.Config) Int32 {
-	fmt.Println("called")
-	return Int32(0)
-}
+// func GetClasslessSR(config c.Config)  {
+// 	return nil
+// }
 
 func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 	return map[layers.DHCPOpt]DHCPOptionValue{
@@ -152,6 +161,6 @@ func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 		layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
 		layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
 
-		layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
+		// layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
 	}
 }
