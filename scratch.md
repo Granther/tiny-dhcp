@@ -33,3 +33,7 @@
 ### Parsing complex config
 - Make function to parse each different kind of data
 - Some data is in a list so maybe switch to json
+
+### Read reqeust list
+- Read to see if I need to return something or do something
+- Like a T1 or T2 that specifies I renew a lease

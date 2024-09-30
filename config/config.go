@@ -10,51 +10,52 @@ import (
 )
 
 type DHCP struct {
-	SubnetMask		string `json:"subnet_mask"`
-	Router			[]string `json:"router"`
-	TimeServer		[]string `json:"time_server"`
-	NameServer		[]string `json:"name_server"`
-	DNSServer		[]string `json:"dns_server"`
-	LogServer		[]string `json:"log_server"`
-	LeaseLen		int `json:"lease_len"`
-	Hostname		string `json:"hostname"`
-	DomainName		string `json:"domain_name"`
-	IPForwarding	bool `json:"ip_forwarding"`
-	DatagramMTU		int `json:"datagram_mtu"`
-	DefaultTTL		int `json:"default_ttl"`
-	TCPTTL			int `json:"tcp_ttl"`
-	BroadcastAddr	string `json:"broadcase_add"`
-	RouterDiscovery bool `json:"router_discovery"`
-	NTPServer		[]string `json:"ntp_server"`
+	SubnetMask      string   `json:"subnetMask"`
+	Router          []string `json:"router"`
+	TimeServer      []string `json:"timeServer"`
+	NameServer      []string `json:"nameServer"`
+	DNSServer       []string `json:"dnsServer"`
+	LogServer       []string `json:"logServer"`
+	LeaseLen        int      `json:"leaseLen"`
+	Hostname        string   `json:"hostname"`
+	DomainName      string   `json:"domainName"`
+	IPForwarding    bool     `json:"ipForwarding"`
+	DatagramMTU     int      `json:"datagramMTU"`
+	DefaultTTL      int      `json:"defaultTTL"`
+	TCPTTL          int      `json:"tcpTTL"`
+	BroadcastAddr   string   `json:"broadcastAddr"`
+	RouterDiscovery bool     `json:"routerDiscovery"`
+	NTPServer       []string `json:"ntpServer"`
 }
 
 type Server struct {
-	Port 			int `json:"port"`
-	ListenInterface	string `json:"listen_interface"`
-	NumWorkers		int	`json:"num_workers"`
+	Port            int    `json:"port"`
+	ListenInterface string `json:"listenInterface"`
+	NumWorkers      int    `json:"numWorkers"`
 }
 
 type Config struct {
 	Server Server `json:"server"`
-	DHCP DHCP `json:"dhcp"`
+	DHCP   DHCP   `json:"dhcp"`
 }
 
-func ReadConfig(configFile string) (*Config, error) {
+
+func ReadConfig(configPath string) (Config, error) {
+	var config Config
 	viper.SetConfigName("config")
 	viper.SetConfigType("json")
-	viper.AddConfigPath("../")
+	viper.AddConfigPath(configPath)
 
 	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("Error reading config file: %w", err)
+		return config, fmt.Errorf("Error reading config file: %w", err)
 	}
 
-	var config Config
 	err := viper.Unmarshal(&config)
 	if err != nil {
-		return nil, fmt.Errorf("Error occured while unmarshaling config: %w", err)
+		return config, fmt.Errorf("Error occured while unmarshaling config: %w", err)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 func WriteConfig(writePath string, config *Config) error {

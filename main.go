@@ -35,9 +35,6 @@ type packetJob struct {
 }
 
 func NewServer(config c.Config) (*Server, error) {
-	// addr := config.Metal.ListenAddr
-	// listenAddr := net.UDPAddr{Port: 67, IP: net.ParseIP(addr)}
-
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
 		log.Fatalf("Failed to get interface: %v", err)
@@ -55,7 +52,10 @@ func NewServer(config c.Config) (*Server, error) {
         return nil, fmt.Errorf("Error creating server UDP listener: %v", err)
     }
 
-	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
+	// Windows interface: \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
+	// handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
+	
+	handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w", err)
 	}
@@ -145,20 +145,18 @@ func (s *Server) worker() {
 }
 
 func main() {
-	config, err := c.ReadConfig("ll"); if err != nil {
+	config, err := c.ReadConfig("."); if err != nil {
 		log.Fatalf("Error parsing config file: %v", err)
 		os.Exit(1)
 		return
 	}
 
-	fmt.Println(config.Server.ListenInterface)
-
-	// server, err := NewServer(config)
-	// if err != nil {
-	// 	log.Fatalf("Error occured while instantiating server: %v", err)
-	// 	return
-	// }
-	// server.Start()
+	server, err := NewServer(config)
+	if err != nil {
+		log.Fatalf("Error occured while instantiating server: %v", err)
+		return
+	}
+	server.Start()
 }
 
 // Function to handle a DHCP packet in a new goroutine
@@ -244,17 +242,17 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, len)
 
-	var subnet []net.IP = []net.IP{net.ParseIP("255.255.255.0"), net.ParseIP("255.255.255.0")} 
-	var sub []byte
-	for _, s := range subnet {
-		sub = append(sub, s)
-	}
+	// var subnet []net.IP = []net.IP{net.ParseIP("255.255.255.0"), net.ParseIP("255.255.255.0")} 
+	// var sub []byte
+	// for _, s := range subnet {
+	// 	sub = append(sub, s)
+	// }
 
 	// Converts const to byte, then wraps byte in byte slice cause NewDHCPOption takes a byte slice
 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
-	subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, subnet)
-	gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, []byte(net.ParseIP(config.DHCP.Router).To4()))
-	dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.DHCP.DNSServer).To4()))
+	// subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, subnet)
+	// gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, []byte(net.ParseIP(config.DHCP.Router).To4()))
+	// dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.DHCP.DNSServer).To4()))
 	leaseLenOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, lenBuf)
 
 	// []byte(net.ParseIP(config.DHCP.SubnetMask).To4())
@@ -262,9 +260,9 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
     // Collect them into a DHCPOptions slice
     dhcpOptions := layers.DHCPOptions{
         msgTypeOption,
-		subnetMaskOption,
-		gatewayOption,
-		dnsOption,
+		// subnetMaskOption,
+		// gatewayOption,
+		// dnsOption,
 		leaseLenOption,
     }
 	dhcpLayer, _ := dhcpUtils.ConstructOfferLayer(packet_slice, offeredIP, dhcpOptions, config) // Returns pointer to what was affected
