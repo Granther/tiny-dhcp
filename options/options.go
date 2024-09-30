@@ -2,7 +2,7 @@ package options
 
 import (
 	// "log"
-	// "fmt"
+	"fmt"
 	"net"
 	"strings"
 	"encoding/binary"
@@ -74,9 +74,6 @@ import (
 
 type DHCPOptionValue interface {
 	ToBytes() []byte
-	ToUint16() uint16
-	ToUint32() uint32
-	ToBool() bool
 }
 
 type IPAddress string
@@ -92,7 +89,7 @@ func (ipSlice IPAddressSlice) ToBytes() []byte {
 }
 
 type Int32 uint32
-func (Int Int32) ToUint32() uint32 {
+func (Int Int32) ToBytes() []byte {
 	// Cast Int to Uint
 	Uint := uint32(Int)
 	// Make 4 byte slice, since uint32 is 4 bytes
@@ -104,7 +101,7 @@ func (Int Int32) ToUint32() uint32 {
 }
 
 type Int16 uint16
-func (Int Int16) ToUint16() uint16 {
+func (Int Int16) ToBytes() []byte {
 	// Cast Int to Uint
 	Uint := uint16(Int)
 	// Make 4 byte slice, since uint32 is 4 bytes
@@ -116,8 +113,11 @@ func (Int Int16) ToUint16() uint16 {
 }
 
 type Bool bool
-func (b Bool) ToBool() bool {
-	return b
+func (b Bool) ToBytes() []byte {
+	if b {
+		return []byte{1}
+	}
+	return []byte{0}
 }
 
 type String string
@@ -125,6 +125,10 @@ func (str String) ToBytes() []byte {
 	return []byte(str)
 }
 
+func GetClasslessSR(config c.Config) Int32 {
+	fmt.Println("called")
+	return Int32(0)
+}
 
 func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 	return map[layers.DHCPOpt]DHCPOptionValue{
@@ -147,5 +151,7 @@ func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 
 		layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
 		layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
+
+		layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
 	}
 }

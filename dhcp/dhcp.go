@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 
+
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket"
 	
@@ -29,24 +30,12 @@ func GetMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool)
 	return layers.DHCPMsgTypeUnspecified, false
 }
 
-func ReadRequestList(layer *layers.DHCPv4) error {
-	log.Println("Reading request list")
-	log.Println(layer.Options)
-
-	// for option := range layer.DHCPOptions {
-	// 	log.Println("Option found")
-	// }
-
-	return nil
-}
-
-func ConstructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions layers.DHCPOptions, config c.Config) (*layers.DHCPv4, error) {
+func ConstructOfferLayer(packet_slice []byte, offeredIP net.IP, config c.Config) (*layers.DHCPv4, error) {
 	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
 
 	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
 	discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
-
 
 	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
 	if !ok {
@@ -74,10 +63,26 @@ func ConstructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions laye
 		Secs:         secs, // Make this up for now
 		YourClientIP: offeredIP, 
 		ClientHWAddr: ethernetPacket.SrcMAC,
-		Options:     DHCPOptions,
+		// Options:     dhcpOptions,
 	}
 
 	return dhcpLayer, nil
+}
+
+func ReadRequestList(layer *layers.DHCPv4) error {
+
+	for option, _ := range layer.Options {
+		log.Println(option)
+	}
+
+	log.Println("Reading request list")
+	// log.Println(layer.Options)
+
+	// for option := range layer.DHCPOptions {
+	// 	log.Println("Option found")
+	// }
+
+	return nil
 }
 
 func GetInterfaceIP(interfaceName string) (net.IP, error) {
