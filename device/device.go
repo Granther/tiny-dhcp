@@ -1,68 +1,65 @@
 package device
 
-// import (
-// 	"log"
-// 	"net"
-// 	"fmt"
+import (
+	"net"
+	"fmt"
+)
 
-// 	c "gdhcp/config"
-// )
+func GetUDPAddr(iface *net.Interface) (*net.UDPAddr, error) {
+	// if interName == "any" {
+	// 	log.Println("Interface is any, setting listen addr to 0.0.0.0:67")
+	// 	return net.UDPAddr(Port: 67, IP: net.IP{0, 0, 0, 0}), nil
+	// }
 
-// func GetUDPAddr(interName string) (*net.UDPAddr) {
-// 	// If interface is any, 0.0.0.0
+	// devices, _ := pcap.FindAllDevs()
+	// for _, device := range devices {
+	// 	if interName == device.Name {
+	// 		ip := GetInterfaceIP()
+	// 		log.Println("Interface found, setting listen addr to :67")
+	// 	}
+	// }
 
-// 	// else
-// 	// See if interface with that name exists
+	ip, err := GetInterfaceIP(iface); if err != nil {
+		return nil, fmt.Errorf("Error getting IP addr for interface: %w", err)
+	}
 
-// 	// get interface ip
-// 	// return udpaddr with port and addr
+	// iface, err := net.InterfaceByName(interName)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Failed to get interface: %v", err)
+	// }
 
-// 	if interName == "any" {
-// 		log.Println("Interface is any, setting listen addr to 0.0.0.0:67")
-// 		return net.UDPAddr(Port: 67, IP: net.IP{0, 0, 0, 0}), nil
-// 	}
+	// ip, err := GetInterfaceIP(iface)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Failed to get interface IP: %v", err)
+	// }
 
-// 	devices, _ := pcap.FindAllDevs()
-// 	for _, device := range devices {
-// 		if interName == device.Name {
-// 			ip := GetInterfaceIP()
-// 			log.Println("Interface found, setting listen addr to 0.0.0.0:67")
-// 		}
-// 	}
+	return &net.UDPAddr{Port: 67, IP: ip}, nil
+}
 
-// 	iface, err := net.InterfaceByName(interName)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Failed to get interface: %v", err)
-// 	}
+func GetInterfaceIP(iface *net.Interface) (net.IP, error) {
+	var ip net.IP
 
-// 	ip, err := GetInterfaceIP(iface)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Failed to get interface IP: %v", err)
-// 	}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return ip, fmt.Errorf("Failed to get addresses from interface: %w", err)
+	}
 
-// 	return &net.UDPAddr(Port: 67, IP: ip)
-// }
+	// Use the first IP address the interface has
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if ok && ipNet.IP.To4() != nil {
+			ip = ipNet.IP
+			break
+		}
+	}
 
-// func GetInterfaceIP(iface net.Interface) (net.IP, error) {
-// 	var ip net.IP
+	if ip == nil {
+		return ip, fmt.Errorf("No valid IPv4 address found on interface: %v", iface.Name)
+	}
 
-// 	addrs, err := iface.Addrs()
-// 	if err != nil {
-// 		return ip, fmt.Errorf("Failed to get addresses from interface: %w", err)
-// 	}
+	return ip, nil
+}
 
-// 	// Use the first IP address the interface has
-// 	for _, addr := range addrs {
-// 		ipNet, ok := addr.(*net.IPNet)
-// 		if ok && ipNet.IP.To4() != nil {
-// 			ip = ipNet.IP
-// 			break
-// 		}
-// 	}
-
-// 	if ip == nil {
-// 		return ip, fmt.Errorf("No valid IPv4 address found on interface: %v", interfaceName)
-// 	}
-
-// 	return ip, nil
+// func GetInterfaceMAC(iface net.Interface) (net.HardwareAddr, error) {
+// 	return iface.HardwareAddr
 // }

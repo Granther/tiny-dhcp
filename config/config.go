@@ -1,10 +1,12 @@
-package main
+package config
 
 import (
 	"log"
 	"fmt"
 	"encoding/json"
 	"io/ioutil"
+
+	"github.com/spf13/viper"
 )
 
 type DHCP struct {
@@ -37,9 +39,23 @@ type Config struct {
 	DHCP DHCP `json:"dhcp"`
 }
 
-// func ReadConfig(configFile string) (*Config) {
+func ReadConfig(configFile string) (*Config, error) {
+	viper.SetConfigName("config")
+	viper.SetConfigType("json")
+	viper.AddConfigPath("../")
 
-// }
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("Error reading config file: %w", err)
+	}
+
+	var config Config
+	err := viper.Unmarshal(&config)
+	if err != nil {
+		return nil, fmt.Errorf("Error occured while unmarshaling config: %w", err)
+	}
+
+	return &config, nil
+}
 
 func WriteConfig(writePath string, config *Config) error {
     jsonData, err := json.MarshalIndent(config, "", "    ")
@@ -53,9 +69,6 @@ func WriteConfig(writePath string, config *Config) error {
 	if err != nil {
 		return fmt.Errorf("Error writing marshalled JSON to config file: %w", err)
 	}	
-
-	// // Output the JSON string
-    // fmt.Println(string(jsonData))
 
 	return nil
 }
@@ -88,10 +101,10 @@ func GetDefaultConfig() *Config {
     }
 }
 
-func main() {
-	config := GetDefaultConfig()
-	WriteConfig("./", config)
-}
+// func main() {
+// 	config := GetDefaultConfig()
+// 	WriteConfig("./", config)
+// }
 
 
 // DHCPOptSubnetMask            DHCPOpt = 1   // 4, net.IP

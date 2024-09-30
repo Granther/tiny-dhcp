@@ -10,19 +10,19 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
-	"github.com/spf13/viper"
+	// "github.com/spf13/viper"
 
 	c "gdhcp/config"
 	dhcpUtils "gdhcp/dhcp"
 	deviceUtils "gdhcp/device"
 )
 
-
-
 type Server struct {
 	conn		*net.UDPConn
 	handle		*pcap.Handle
-	config		c.Configurations
+	serverIP	net.IP
+	serverMAC	net.HardwareAddr
+	config		c.Config
 	workerPool	chan struct{}
 	packetch 	chan packetJob
 	sendch		chan []byte
@@ -34,22 +34,28 @@ type packetJob struct {
     clientAddr  *net.UDPAddr
 }
 
-func NewServer(config c.Configurations) (*Server, error) {
+func NewServer(config c.Config) (*Server, error) {
 	// addr := config.Metal.ListenAddr
 	// listenAddr := net.UDPAddr{Port: 67, IP: net.ParseIP(addr)}
-	listenAddr, err := deviceUtils(config.Metal.Interface)
+
+	iface, err := net.InterfaceByName(config.Server.ListenInterface)
+	if err != nil {
+		log.Fatalf("Failed to get interface: %v", err)
+		os.Exit(1)
+	}
+
+	listenAddr, err := deviceUtils.GetUDPAddr(iface)
 	if err != nil {
 		log.Fatalf("Error occured while creating listen address struct, please review the interface configuration: %w", err)
 		os.Exit(1)
 	}
 	
-	conn, err := net.ListenUDP("udp", &listenAddr)
+	conn, err := net.ListenUDP("udp", listenAddr)
 	if err != nil {
         return nil, fmt.Errorf("Error creating server UDP listener: %v", err)
     }
 
-	inter := config.Metal.Interface
-	handle, err := pcap.OpenLive(inter, 1500, false, pcap.BlockForever)
+	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w", err)
 	}
@@ -58,6 +64,8 @@ func NewServer(config c.Configurations) (*Server, error) {
 	return &Server{
 		conn:		conn,
 		handle:		handle,
+		serverIP:	listenAddr.IP,
+		serverMAC:	iface.HardwareAddr,
 		config:		config,
 		workerPool:	make(chan struct{}, numWorkers),
 		packetch:	make(chan packetJob, 1000), // Can hold 1000 packets
@@ -136,40 +144,25 @@ func (s *Server) worker() {
     }
 }
 
-func readConfig() (c.Configurations, error) {
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-	viper.SetConfigType("yml")
-	var config c.Configurations
-
-	if err := viper.ReadInConfig(); err != nil {
-		return config, fmt.Errorf("Error reading config file, %s", err)
-	}
-
-	err := viper.Unmarshal(&config)
-	if err != nil {
-		return config, fmt.Errorf("Error decoding from struct, %s", err)
-	}
-
-	return config, nil
-}
-
 func main() {
-	config, err := readConfig(); if err != nil {
+	config, err := c.ReadConfig("ll"); if err != nil {
 		log.Fatalf("Error parsing config file: %v", err)
+		os.Exit(1)
 		return
 	}
 
-	server, err := NewServer(config)
-	if err != nil {
-		log.Fatalf("Error occured while instantiating server: %v", err)
-		return
-	}
-	server.Start()
+	fmt.Println(config.Server.ListenInterface)
+
+	// server, err := NewServer(config)
+	// if err != nil {
+	// 	log.Fatalf("Error occured while instantiating server: %v", err)
+	// 	return
+	// }
+	// server.Start()
 }
 
 // Function to handle a DHCP packet in a new goroutine
-func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Configurations) {
+func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Config) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	dhcp_layer := dhcp_packet.Layer(layers.LayerTypeDHCPv4)
 
@@ -207,7 +200,7 @@ func generateAddr() (net.IP) {
 	return net.IP{192, 168, 1, 180}
 }
 
-func (s *Server) createOffer(packet_slice []byte, config c.Configurations) {
+func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
     ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
 	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
@@ -215,14 +208,14 @@ func (s *Server) createOffer(packet_slice []byte, config c.Configurations) {
 	buf := gopacket.NewSerializeBuffer()
 	var layersToSerialize []gopacket.SerializableLayer
 
-	srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
-	if err != nil {
-		log.Fatalf("Error occured while parsing server Hardware addr")
-		return
-	}
+	// srcMac, err := net.ParseMAC(config.Metal.HardwareAddr)
+	// if err != nil {
+	// 	log.Fatalf("Error occured while parsing server Hardware addr")
+	// 	return
+	// }
 
 	ethernetLayer := &layers.Ethernet{
-		SrcMAC: srcMac,
+		SrcMAC: s.serverMAC,
 		DstMAC: ethernetPacket.SrcMAC,
 		EthernetType: layers.EthernetTypeIPv4,
 	}
@@ -234,7 +227,7 @@ func (s *Server) createOffer(packet_slice []byte, config c.Configurations) {
 	ipLayer := &layers.IPv4{
 		Version: 4,
 		TTL: 64,
-		SrcIP: net.ParseIP(config.Server.ServerAddr),
+		SrcIP: s.serverIP,
 		DstIP: broadcastIP,
 		Protocol: layers.IPProtocolUDP,
 	}
@@ -250,12 +243,21 @@ func (s *Server) createOffer(packet_slice []byte, config c.Configurations) {
 	var len uint32 = 3000
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, len)
+
+	var subnet []net.IP = []net.IP{net.ParseIP("255.255.255.0"), net.ParseIP("255.255.255.0")} 
+	var sub []byte
+	for _, s := range subnet {
+		sub = append(sub, s)
+	}
+
 	// Converts const to byte, then wraps byte in byte slice cause NewDHCPOption takes a byte slice
 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
-	subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, []byte(net.ParseIP(config.Server.Subnet).To4()))
-	gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, []byte(net.ParseIP(config.Server.Gateway).To4()))
-	dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.Server.DNS).To4()))
+	subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, subnet)
+	gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, []byte(net.ParseIP(config.DHCP.Router).To4()))
+	dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.DHCP.DNSServer).To4()))
 	leaseLenOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, lenBuf)
+
+	// []byte(net.ParseIP(config.DHCP.SubnetMask).To4())
 
     // Collect them into a DHCPOptions slice
     dhcpOptions := layers.DHCPOptions{
@@ -278,3 +280,20 @@ func (s *Server) createOffer(packet_slice []byte, config c.Configurations) {
 	s.sendch <- buf.Bytes()
 }
 
+// func readConfig() (c.Configur, error) {
+	// 	viper.SetConfigName("config")
+	// 	viper.AddConfigPath(".")
+	// 	viper.SetConfigType("yml")
+	// 	var config c.Configurations
+	
+	// 	if err := viper.ReadInConfig(); err != nil {
+	// 		return config, fmt.Errorf("Error reading config file, %s", err)
+	// 	}
+	
+	// 	err := viper.Unmarshal(&config)
+	// 	if err != nil {
+	// 		return config, fmt.Errorf("Error decoding from struct, %s", err)
+	// 	}
+	
+	// 	return config, nil
+	// }

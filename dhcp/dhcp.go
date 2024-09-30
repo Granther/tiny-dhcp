@@ -29,18 +29,31 @@ func GetMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool)
 	return layers.DHCPMsgTypeUnspecified, false
 }
 
+func ReadRequestList(layer *layers.DHCPv4) error {
+	log.Println("Reading request list")
+	log.Println(layer.Options)
 
-func ConstructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions layers.DHCPOptions, config c.Configurations) (*layers.DHCPv4, error) {
+	// for option := range layer.DHCPOptions {
+	// 	log.Println("Option found")
+	// }
+
+	return nil
+}
+
+func ConstructOfferLayer(packet_slice []byte, offeredIP net.IP, DHCPOptions layers.DHCPOptions, config c.Config) (*layers.DHCPv4, error) {
 	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
 
 	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
 	discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
 
+
 	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
 	if !ok {
 		log.Fatalf("Error while parsing DHCPv4 layer in packet")
 	} 
+
+	ReadRequestList(lowPacket)
 
 	ethernetPacket, ok := discEthLayer.(*layers.Ethernet)
 	if !ok {
@@ -111,3 +124,13 @@ func GetInterfaceHA(interfaceName string) (net.HardwareAddr, error) {
 
 	return hardwareAddr, nil
 }
+
+// func JsonIPListToBytes(jsonList []string) []bytes {
+// 	var byteSlice []byte 
+
+// 	for ip := range jsonList {
+// 		byteSlice = append(byteSlice, net.ParseIP(ip).To4())
+// 	}
+
+// 	return byteSlice
+// }
