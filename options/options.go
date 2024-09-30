@@ -12,66 +12,6 @@ import (
 	c "gdhcp/config"
 )
 
-// func IpToBytes(IP string) []byte {
-// 	return net.ParseIP(IP).To4()
-// }
-
-// func BoolToBytes(Bool bool) []byte {
-// 	if Bool {
-// 		return []byte{1}
-// 	}
-// 	return []byte{0}
-// }
-
-// func StringToBytes(Str string) []byte {
-// 	return []byte(Str)
-// }
-
-// func IntTo32Bytes(Int int) []byte {
-// 	// Cast Int to Uint
-// 	Uint := uint32(Int)
-// 	// Make 4 byte slice, since uint32 is 4 bytes
-// 	buf := make([]byte, 4)
-// 	// Networks use Big endian
-// 	binary.BigEndian.PutUint32(buf, Uint)
-
-// 	return buf
-// }
-
-// func IntTo16Bytes(Int int) []byte {
-// 	// Cast Int to Uint
-// 	Uint := uint16(Int)
-// 	// Make 4 byte slice, since uint16 is 2 bytes
-// 	buf := make([]byte, 2)
-// 	// Networks use Big endian
-// 	binary.BigEndian.PutUint16(buf, Uint)
-
-// 	return buf
-// }
-
-// func IpSliceToBytes(IpList []string) []byte {
-// 	// We can be better and get len from IpList
-
-//     return []byte(strings.Join(IpList, ""))
-// 	// var buffer bytes.Buffer
-//     // for _, s := range IpList {
-//     //     buffer.WriteString(s)
-//     // }
-//     // return buffer.Bytes()
-// 	// var totalLen int
-//     // for _, s := range IpList {
-//     //     totalLen += len(s)
-//     // }
-
-//     // result := make([]byte, totalLen)
-//     // var i int
-//     // for _, s := range IpList {
-//     //     i += copy(result[i:], s)
-//     // }
-
-//     // return result
-// }
-
 type DHCPOptionValue interface {
 	ToBytes() []byte
 }
