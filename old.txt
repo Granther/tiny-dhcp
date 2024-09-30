@@ -273,3 +273,9 @@ package test
 //     // fmt.Printf("Database Password: %s\n", config.Database.Password)
 //     // fmt.Printf("Database Name: %s\n", config.Database.DBName)
 // }
+
+// type OptionHandler func(dhcpRequest *layers.DHCPv4, config c.Config) []byte
+
+// func handleBroadcastAddr(dhcpRequest *layers.DHCPv4, config c.Config) []byte {
+// 	return net.ParseIP(config.DHCP.BroadcastAddr).To4()
+// }

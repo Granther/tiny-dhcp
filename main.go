@@ -15,6 +15,7 @@ import (
 	c "gdhcp/config"
 	dhcpUtils "gdhcp/dhcp"
 	deviceUtils "gdhcp/device"
+	options "gdhcp/options"
 )
 
 type Server struct {
@@ -23,6 +24,7 @@ type Server struct {
 	serverIP	net.IP
 	serverMAC	net.HardwareAddr
 	config		c.Config
+	optionsMap	map[layers.DHCPOpt][]byte
 	workerPool	chan struct{}
 	packetch 	chan packetJob
 	sendch		chan []byte
@@ -60,13 +62,19 @@ func NewServer(config c.Config) (*Server, error) {
 		return nil, fmt.Errorf("Could not open pcap device: %w", err)
 	}
 
+	optionsMap := options.CreateOptionMap(config)
 	numWorkers := config.Server.NumWorkers
+
+	fmt.Println("%v", optionsMap[layers.DHCPOptBroadcastAddr])
+	fmt.Println("%v", optionsMap[layers.DHCPOptRouter])
+
 	return &Server{
 		conn:		conn,
 		handle:		handle,
 		serverIP:	listenAddr.IP,
 		serverMAC:	iface.HardwareAddr,
 		config:		config,
+		optionsMap: optionsMap,
 		workerPool:	make(chan struct{}, numWorkers),
 		packetch:	make(chan packetJob, 1000), // Can hold 1000 packets
 		sendch:		make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
@@ -242,16 +250,10 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, len)
 
-	// var subnet []net.IP = []net.IP{net.ParseIP("255.255.255.0"), net.ParseIP("255.255.255.0")} 
-	// var sub []byte
-	// for _, s := range subnet {
-	// 	sub = append(sub, s)
-	// }
-
 	// Converts const to byte, then wraps byte in byte slice cause NewDHCPOption takes a byte slice
 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
 	// subnetMaskOption := layers.NewDHCPOption(layers.DHCPOptSubnetMask, subnet)
-	// gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, []byte(net.ParseIP(config.DHCP.Router).To4()))
+	gatewayOption := layers.NewDHCPOption(layers.DHCPOptRouter, s.optionsMap[layers.DHCPOptRouter])
 	// dnsOption := layers.NewDHCPOption(layers.DHCPOptDNS, []byte(net.ParseIP(config.DHCP.DNSServer).To4()))
 	leaseLenOption := layers.NewDHCPOption(layers.DHCPOptLeaseTime, lenBuf)
 
@@ -261,7 +263,7 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
     dhcpOptions := layers.DHCPOptions{
         msgTypeOption,
 		// subnetMaskOption,
-		// gatewayOption,
+		gatewayOption,
 		// dnsOption,
 		leaseLenOption,
     }

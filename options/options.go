@@ -1,29 +1,151 @@
-package main
+package options
 
 import (
 	// "log"
-	"fmt"
+	// "fmt"
 	"net"
+	"strings"
+	"encoding/binary"
 
 	"github.com/google/gopacket/layers"
 
 	c "gdhcp/config"
 )
 
-type OptionHandler func(dhcpRequest *layers.DHCPv4, config c.Config)
+// func IpToBytes(IP string) []byte {
+// 	return net.ParseIP(IP).To4()
+// }
 
-func handleBroadcastAddr(dhcpRequest *layers.DHCPv4, config c.Config) {
-	return net.ParseIP(config.DHCP.BroadcastAddr).To4()
+// func BoolToBytes(Bool bool) []byte {
+// 	if Bool {
+// 		return []byte{1}
+// 	}
+// 	return []byte{0}
+// }
+
+// func StringToBytes(Str string) []byte {
+// 	return []byte(Str)
+// }
+
+// func IntTo32Bytes(Int int) []byte {
+// 	// Cast Int to Uint
+// 	Uint := uint32(Int)
+// 	// Make 4 byte slice, since uint32 is 4 bytes
+// 	buf := make([]byte, 4)
+// 	// Networks use Big endian
+// 	binary.BigEndian.PutUint32(buf, Uint)
+
+// 	return buf
+// }
+
+// func IntTo16Bytes(Int int) []byte {
+// 	// Cast Int to Uint
+// 	Uint := uint16(Int)
+// 	// Make 4 byte slice, since uint16 is 2 bytes
+// 	buf := make([]byte, 2)
+// 	// Networks use Big endian
+// 	binary.BigEndian.PutUint16(buf, Uint)
+
+// 	return buf
+// }
+
+// func IpSliceToBytes(IpList []string) []byte {
+// 	// We can be better and get len from IpList
+
+//     return []byte(strings.Join(IpList, ""))
+// 	// var buffer bytes.Buffer
+//     // for _, s := range IpList {
+//     //     buffer.WriteString(s)
+//     // }
+//     // return buffer.Bytes()
+// 	// var totalLen int
+//     // for _, s := range IpList {
+//     //     totalLen += len(s)
+//     // }
+
+//     // result := make([]byte, totalLen)
+//     // var i int
+//     // for _, s := range IpList {
+//     //     i += copy(result[i:], s)
+//     // }
+
+//     // return result
+// }
+
+type DHCPOptionValue interface {
+	ToBytes() []byte
+	ToUint16() uint16
+	ToUint32() uint32
+	ToBool() bool
 }
 
-//func FufillRequestList
+type IPAddress string
+func (ip IPAddress) ToBytes() []byte {
+	str := string(ip)
+	return net.ParseIP(str).To4()
+}
 
-func main() {
-	var optionHandlers = map[layers.DHCPOpt]OptionHandler{
-		layers.DHCPOptBroadcastAddr: handleBroadcast,
+type IPAddressSlice []string
+func (ipSlice IPAddressSlice) ToBytes() []byte {
+	slice := []string(ipSlice)
+    return []byte(strings.Join(slice, ""))
+}
+
+type Int32 uint32
+func (Int Int32) ToUint32() uint32 {
+	// Cast Int to Uint
+	Uint := uint32(Int)
+	// Make 4 byte slice, since uint32 is 4 bytes
+	buf := make([]byte, 4)
+	// Networks use Big endian
+	binary.BigEndian.PutUint32(buf, Uint)
+
+	return buf
+}
+
+type Int16 uint16
+func (Int Int16) ToUint16() uint16 {
+	// Cast Int to Uint
+	Uint := uint16(Int)
+	// Make 4 byte slice, since uint32 is 4 bytes
+	buf := make([]byte, 2)
+	// Networks use Big endian
+	binary.BigEndian.PutUint16(buf, Uint)
+
+	return buf
+}
+
+type Bool bool
+func (b Bool) ToBool() bool {
+	return b
+}
+
+type String string
+func (str String) ToBytes() []byte {
+	return []byte(str)
+}
+
+
+func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
+	return map[layers.DHCPOpt]DHCPOptionValue{
+		layers.DHCPOptSubnetMask: 		IPAddress(config.DHCP.SubnetMask),
+		layers.DHCPOptBroadcastAddr: 	IPAddress(config.DHCP.BroadcastAddr),
+
+		layers.DHCPOptRouter: 			IPAddressSlice(config.DHCP.Router),
+		layers.DHCPOptNameServer: 		IPAddressSlice(config.DHCP.NameServer),
+		layers.DHCPOptDNS: 				IPAddressSlice(config.DHCP.DNSServer),
+		layers.DHCPOptLogServer: 		IPAddressSlice(config.DHCP.LogServer),
+		layers.DHCPOptNTPServers: 		IPAddressSlice(config.DHCP.NTPServer),
+
+		layers.DHCPOptLeaseTime: 		Int32(config.DHCP.LeaseLen),
+		layers.DHCPOptDatagramMTU: 		Int32(config.DHCP.DatagramMTU),
+		layers.DHCPOptDefaultTTL: 		Int16(config.DHCP.DefaultTTL),
+		layers.DHCPOptTCPTTL: 			Int16(config.DHCP.TCPTTL),
+
+		layers.DHCPOptHostname: 		String(config.DHCP.Hostname),
+		layers.DHCPOptDomainName: 		String(config.DHCP.DomainName),
+
+		layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
+		layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
 	}
-
-	handler, _ := optionHandlers[layers.DHCPOptBroadcastAddr]
-	handler("hello")
 }
-
