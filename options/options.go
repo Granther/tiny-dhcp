@@ -1,8 +1,8 @@
 package options
 
 import (
-	// "log"
 	// "fmt"
+	"log"
 	"net"
 	// "strings"
 	"encoding/binary"
@@ -75,9 +75,33 @@ func (str String) ToBytes() []byte {
 	return []byte(str)
 }
 
-// func GetClasslessSR(config c.Config)  {
-// 	return nil
-// }
+type ClasslessStaticRoute []byte
+func (c ClasslessStaticRoute) ToBytes() []byte {
+	return c
+}
+
+
+func GetClasslessSR(config c.Config) DHCPOptionValue {
+    destCIDR := "10.10.1.0/24"
+    routerIP := "10.10.1.1"
+
+    // Parse the CIDR to get the IP and subnet mask
+    _, ipNet, err := net.ParseCIDR(destCIDR)
+    if err != nil {
+        log.Fatalf("Error parsing CIDR: %v", err)
+    }
+
+    // Determine the prefix length
+    prefixLen, _ := ipNet.Mask.Size()
+
+    // Create the option byte slice
+    var option []byte
+    option = append(option, byte(prefixLen))              // Prefix length
+    option = append(option, ipNet.IP[0:prefixLen/8]...)   // Destination IP according to the prefix length
+    option = append(option, net.ParseIP(routerIP)...)
+
+    return ClasslessStaticRoute(option)
+}
 
 func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 	return map[layers.DHCPOpt]DHCPOptionValue{

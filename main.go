@@ -58,10 +58,10 @@ func NewServer(config c.Config) (*Server, error) {
 
 	// WINDOWS DEV
 	// Windows interface: \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
-	// handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
+	handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
 
 	// Create handle for responding to requests later on
-	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
+	// handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w", err)
 	}
@@ -227,14 +227,14 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	}
 	layersToSerialize = append(layersToSerialize, ethernetLayer)
 
-	broadcastIP := net.IPv4(255, 255, 255, 255)
+	broadcastAddr := net.IP{255, 255, 255, 255}
 	offeredIP := generateAddr()
 
 	ipLayer := &layers.IPv4{
 		Version: 4,
 		TTL: 64,
-		SrcIP: s.serverIP,
-		DstIP: broadcastIP,
+		SrcIP: s.serverIP, // We always respond on the DHCP ip
+		DstIP: broadcastAddr, // We set the Dest to that of the offered IP
 		Protocol: layers.IPProtocolUDP,
 	}
 	layersToSerialize = append(layersToSerialize, ipLayer)
@@ -261,10 +261,10 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 
 func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*layers.DHCPv4, error) {
 	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
-	EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+	// EthernetPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
 
 	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
-	discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
+	// discEthLayer := EthernetPacket.Layer(layers.LayerTypeEthernet)
 
 	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
 	if !ok {
@@ -282,25 +282,26 @@ func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*la
 	// dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	// dhcpOptions = append(*dhcpOptions, optionsEnd)
 
-	ethernetPacket, ok := discEthLayer.(*layers.Ethernet)
-	if !ok {
-		log.Fatalf("Error while parsing Ethernet layer in packet")
-	} 
+	// ethernetPacket, ok := discEthLayer.(*layers.Ethernet)
+	// if !ok {
+	// 	log.Fatalf("Error while parsing Ethernet layer in packet")
+	// } 
 
-	var hardwareLen uint8 = 6
-	var hardwareOpts uint8 = 0
-	xid := lowPacket.Xid
-	secs := lowPacket.Secs
+	var hardwareLen uint8 = 6 // MAC is commonly 6
+	var hardwareOpts uint8 = 0 // None I guess, maybe specify unicast or something
+	xid := lowPacket.Xid // Carry over XID, "We are in the same conversation"
+	secs := lowPacket.Secs // All secs were 1 in notes
 
 	dhcpLayer := &layers.DHCPv4{
-		Operation:    layers.DHCPOpReply, // Type of Bootp reply
+		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
 		HardwareType: layers.LinkTypeEthernet,
 		HardwareLen:  hardwareLen,
-		HardwareOpts: hardwareOpts,
+		HardwareOpts: hardwareOpts, 
 		Xid:          xid, // Need this from discover
 		Secs:         secs, // Make this up for now
-		YourClientIP: offeredIP, 
-		ClientHWAddr: ethernetPacket.SrcMAC,
+		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
+		// ClientHWAddr: ethernetPacket.SrcMAC,
+		ClientHWAddr: lowPacket.ClientHWAddr,
 		Options:     *dhcpOptions,
 	}
 
@@ -315,6 +316,9 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 	}
 
 	dhcpOptions := layers.DHCPOptions{}
+	
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+	dhcpOptions = append(dhcpOptions, msgTypeOption)
 	// Iterate over Request List, get option requested 
 	for _, req := range requestList.Data {
 		if s.optionsMap[layers.DHCPOpt(req)] == nil {
@@ -329,15 +333,84 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 		dhcpOptions = append(dhcpOptions, op)
 	}
 
-	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
-	dhcpOptions = append(dhcpOptions, msgTypeOption)
+	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
+
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
+	dhcpOptions = append(dhcpOptions, endOptions)
 
 	// We return a pointer so we can append other things later, such as opt 255
 	return &dhcpOptions, true
 }
 
+// func (s *Server) ReadRequestListOffer(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
+// 	// Get RequestParams Option from layer.Options
+// 	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
+// 	if !ok {
+// 		return nil, false
+// 	}
+
+// 	dhcpOptions := layers.DHCPOptions{}
+// 	// Iterate over Request List, get option requested 
+// 	for _, req := range requestList.Data {
+// 		if s.optionsMap[layers.DHCPOpt(req)] == nil {
+// 			continue
+// 		}
+// 		r := s.optionsMap[layers.DHCPOpt(req)].ToBytes()
+// 		if r == nil {
+// 			continue
+// 		}
+
+// 		op := layers.NewDHCPOption(layers.DHCPOpt(req), r) 
+// 		dhcpOptions = append(dhcpOptions, op)
+// 	}
+
+// 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeAck)})
+// 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
+// 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
+
+// 	dhcpOptions = append(dhcpOptions, msgTypeOption)
+// 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
+// 	dhcpOptions = append(dhcpOptions, endOptions)
+
+// 	// We return a pointer so we can append other things later, such as opt 255
+// 	return &dhcpOptions, true
+// }
+
+// func (s *Server) ConstructAckLayer(packet_slice []byte, offeredIP net.IP) (*layers.DHCPv4, error) {
+// 	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
+// 	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
+
+// 	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
+// 	if !ok {
+// 		log.Fatalf("Error while parsing DHCPv4 layer in packet")
+// 	} 
+
+// 	dhcpOptions, ok := s.ReadRequestList(lowPacket)
+// 	if !ok {
+// 		log.Println("Request list does not exist in Discover")
+// 	}
+
+// 	var hardwareLen uint8 = 6 // MAC is commonly 6
+// 	var hardwareOpts uint8 = 0 // None I guess, maybe specify unicast or something
+// 	xid := lowPacket.Xid // Carry over XID, "We are in the same conversation"
+// 	secs := lowPacket.Secs // All secs were 1 in notes
+
+// 	dhcpLayer := &layers.DHCPv4{
+// 		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
+// 		HardwareType: layers.LinkTypeEthernet,
+// 		HardwareLen:  hardwareLen,
+// 		HardwareOpts: hardwareOpts, 
+// 		Xid:          xid, // Need this from discover
+// 		Secs:         secs, // Make this up for now
+// 		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
+// 		// ClientHWAddr: ethernetPacket.SrcMAC,
+// 		ClientHWAddr: lowPacket.ClientHWAddr,
+// 		Options:     *dhcpOptions,
+// 	}
+
+// 	return dhcpLayer, nil
+// }
 
 // func readConfig() (c.Configur, error) {
 	// 	viper.SetConfigName("config")

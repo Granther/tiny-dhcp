@@ -1,17 +1,17 @@
 {
     "server": {
         "port": 100,
-        "listenInterface": "wlp2s0",
+        "listenInterface": "Ethernet",
         "numWorkers": 10
     },
     "dhcp": {
         "subnetMask": "255.255.255.0",
         "router": [
-            "192.168.1.1"
+            "10.10.1.1"
         ],
         "timeServer": [],
         "nameServer": [],
-        "dnsServer": [],
+        "dnsServer": ["10.10.1.1"],
         "logServer": [],
         "leaseLen": 30000,
         "hostname": "gdhcp",
