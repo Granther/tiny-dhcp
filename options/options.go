@@ -120,10 +120,10 @@ func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 		layers.DHCPOptTCPTTL: 			Int16(config.DHCP.TCPTTL),
 
 		layers.DHCPOptHostname: 		String(config.DHCP.Hostname),
-		layers.DHCPOptDomainName: 		String(config.DHCP.DomainName),
+		// layers.DHCPOptDomainName: 		String(config.DHCP.DomainName),
 
 		layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
-		layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
+		// layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
 
 		// layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
 	}

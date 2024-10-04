@@ -465,6 +465,7 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
+
 	dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	dhcpOptions = append(dhcpOptions, endOptions)
@@ -488,6 +489,7 @@ func (s *Server) ConstructAckLayer(packet_slice []byte, offeredIP net.IP) (*laye
 	}
 
 	var hardwareLen uint8 = 6 // MAC is commonly 6
+	var flags uint16 = 0x8000
 	var hardwareOpts uint8 = 0 // None I guess, maybe specify unicast or something
 	xid := lowPacket.Xid // Carry over XID, "We are in the same conversation"
 	secs := lowPacket.Secs // All secs were 1 in notes
@@ -497,6 +499,7 @@ func (s *Server) ConstructAckLayer(packet_slice []byte, offeredIP net.IP) (*laye
 		HardwareType: layers.LinkTypeEthernet,
 		HardwareLen:  hardwareLen,
 		HardwareOpts: hardwareOpts, 
+		Flags:		  flags,
 		Xid:          xid, // Need this from discover
 		Secs:         secs, // Make this up for now
 		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
@@ -532,21 +535,25 @@ func (s *Server) ReadRequestListAck(layer *layers.DHCPv4) (*layers.DHCPOptions, 
 		dhcpOptions = append(dhcpOptions, op)
 	}
 
-	network := "10.10.1.0/24"
-	nextHop := net.ParseIP("10.10.1.1")
+	// network := "10.10.1.0/24"
+	// nextHop := net.ParseIP("10.10.1.1")
 
-	routeData, err := createClasslessStaticRoute(network, nextHop)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	dhcpCIDRRoute := layers.NewDHCPOption(layers.DHCPOptClasslessStaticRoute, routeData)
+	// routeData, err := createClasslessStaticRoute(network, nextHop)
+	// if err != nil {
+	// 	fmt.Println("Error:", err)
+	// }
+	
+	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
+	// dhcpCIDRRoute := layers.NewDHCPOption(layers.DHCPOptClasslessStaticRoute, routeData)
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
+	paddingOption := layers.NewDHCPOption(layers.DHCPOptPad, make([]byte, 23))
 
-	dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
+	// dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
+	dhcpOptions = append(dhcpOptions, dhcpLeaseTime)
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	dhcpOptions = append(dhcpOptions, endOptions)
+	dhcpOptions = append(dhcpOptions, paddingOption)
 
 	// We return a pointer so we can append other things later, such as opt 255
 	return &dhcpOptions, true
@@ -626,7 +633,7 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) {
     // }
 
     // srcMAC := ethernetPacket.SrcMAC
-	srcMAC := net.HardwareAddr{0xe8, 0x7f, 0x95, 0x42, 0x7f, 0x38}
+	srcMAC := net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
     log.Printf("Ethernet SrcMAC: %s", srcMAC.String())
 
     // Try to get the DHCP layer
@@ -751,7 +758,7 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) {
 // }
 
 func generateAddr() (net.IP) {
-	return net.IP{10, 10, 1, 96}
+	return net.IP{10, 10, 1, 40}
 }
 
 // func readConfig() (c.Configur, error) {
