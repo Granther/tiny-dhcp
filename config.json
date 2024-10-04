@@ -13,7 +13,7 @@
         "nameServer": [],
         "dnsServer": ["10.10.1.1"],
         "logServer": [],
-        "leaseLen": 30000,
+        "leaseLen": 776000,
         "hostname": "gdhcp",
         "domainName": "local",
         "ipForwarding": true,
