@@ -11,13 +11,15 @@ import (
 	// c "gdhcp/config"
 )
 
-func GetDHCPOption(options layers.DHCPOptions, optType layers.DHCPOpt) (*layers.DHCPOption, bool) {
+func GetDHCPOption(options layers.DHCPOptions, optType layers.DHCPOpt) (layers.DHCPOption, bool) {
+	var opt layers.DHCPOption
+
 	for _, option := range options {
 		if option.Type == optType {
-			return &option, true
+			return option, true
 		}
 	}
-	return nil, false
+	return opt, false
 }
 
 func GetMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool) {
