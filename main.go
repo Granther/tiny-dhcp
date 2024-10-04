@@ -58,10 +58,10 @@ func NewServer(config c.Config) (*Server, error) {
 
 	// WINDOWS DEV
 	// Windows interface: \\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}
-	handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
+	// handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
 
 	// Create handle for responding to requests later on
-	// handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
+	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w", err)
 	}
@@ -758,7 +758,7 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) {
 // }
 
 func generateAddr() (net.IP) {
-	return net.IP{10, 10, 1, 40}
+	return net.IP{192, 168, 1, 100}
 }
 
 // func readConfig() (c.Configur, error) {

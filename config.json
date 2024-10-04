@@ -1,21 +1,21 @@
 {
     "server": {
         "port": 100,
-        "listenInterface": "Ethernet",
+        "listenInterface": "wlp2s0",
         "numWorkers": 10
     },
     "dhcp": {
         "subnetMask": "255.255.255.0",
         "router": [
-            "10.10.1.1"
+            "192.168.1.1"
         ],
         "timeServer": [],
         "nameServer": [],
-        "dnsServer": ["10.10.1.1"],
+        "dnsServer": ["192.168.1.1"],
         "logServer": [],
         "leaseLen": 776000,
         "hostname": "gdhcp",
-        "domainName": "local",
+        "domainName": "pefsefs.local",
         "ipForwarding": true,
         "datagramMTU": 1500,
         "defaultTTL": 254,
