@@ -1,7 +1,7 @@
 {
     "server": {
         "port": 100,
-        "listenInterface": "wlp2s0",
+        "listenInterface": "Ethernet",
         "numWorkers": 10
     },
     "dhcp": {
