@@ -189,7 +189,7 @@ func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, 
 		s.createOffer(packet_slice, config)
 	case layers.DHCPMsgTypeRequest:
 		log.Printf("Got Request")
-		//s.createNack(packet_slice, config)
+		// s.createNack(packet_slice, config)
 		s.createAck(packet_slice, config)
 	case layers.DHCPMsgTypeOffer:
 		log.Printf("Got Offer")
@@ -209,6 +209,6 @@ func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, 
 }
 
 func generateAddr() (net.IP) {
-	return net.IP{192, 168, 1, 100}
+	return net.IP{10, 10, 1, 100}
 }
 

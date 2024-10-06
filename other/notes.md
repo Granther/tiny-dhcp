@@ -80,3 +80,7 @@
 - bootp flags, all unicast
 - Offer did not contain IP addr field, only request had 50
 - Server does not always completely answer request list
+
+### Oddities
+- On windows, the MAC dst seems to be malformed
+- The discover will have a requested ip option, seems like if it does it will contain that IP as the dst IP in the offer as well as in yiaddr

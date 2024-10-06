@@ -258,20 +258,20 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 		dhcpOptions = append(dhcpOptions, op)
 	}
 
-	network := "192.168.1.0/24"
-	nextHop := net.ParseIP("192.168.1.1")
+	// network := "192.168.1.0/24"
+	// nextHop := net.ParseIP("192.168.1.1")
 
-	routeData, err := createClasslessStaticRoute(network, nextHop)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
+	// routeData, err := createClasslessStaticRoute(network, nextHop)
+	// if err != nil {
+	// 	fmt.Println("Error:", err)
+	// }
 
-	dhcpCIDRRoute := layers.NewDHCPOption(layers.DHCPOptClasslessStaticRoute, routeData)
+	// dhcpCIDRRoute := layers.NewDHCPOption(layers.DHCPOptClasslessStaticRoute, routeData)
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
 
-	dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
+	// dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	dhcpOptions = append(dhcpOptions, endOptions)
 
@@ -283,9 +283,13 @@ func (s *Server) ConstructAckLayer(packet_slice []byte, offeredIP net.IP) (*laye
 	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
 
+	if discDhcpLayer == nil {
+		log.Fatalf("discDhcplayer is nil lol!")
+	}
+
 	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
 	if !ok {
-		log.Fatalf("Error while parsing DHCPv4 layer in packet")
+		log.Println("Error while parsing DHCPv4 layer in packet")
 	} 
 
 	dhcpOptions, ok := s.ReadRequestListAck(lowPacket)
@@ -363,7 +367,7 @@ func (s *Server) ReadRequestListAck(layer *layers.DHCPv4) (*layers.DHCPOptions, 
 }
 
 func (s *Server) createAck(packet_slice []byte, config c.Config) {
-    dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+    dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	discDhcpLayer := dhcp_packet.Layer(layers.LayerTypeDHCPv4)
     
     // Debug: Print all layers
@@ -379,8 +383,10 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) {
 
 	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
 	if !ok {
-		log.Fatalf("Error while parsing DHCPv4 layer in packet")
+		log.Fatalf("Error while parsing DHCPv4 layer in packet in createack")
 	} 
+
+
 
 	// dhcpOptions, ok := s.ReadRequestList(lowPacket)
 	// if !ok {

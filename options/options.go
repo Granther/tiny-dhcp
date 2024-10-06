@@ -106,7 +106,7 @@ func GetClasslessSR(config c.Config) DHCPOptionValue {
 func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 	return map[layers.DHCPOpt]DHCPOptionValue{
 		layers.DHCPOptSubnetMask: 		IPAddress(config.DHCP.SubnetMask),
-		layers.DHCPOptBroadcastAddr: 	IPAddress(config.DHCP.BroadcastAddr),
+		// layers.DHCPOptBroadcastAddr: 	IPAddress(config.DHCP.BroadcastAddr),
 
 		layers.DHCPOptRouter: 			IPAddressSlice(config.DHCP.Router),
 		layers.DHCPOptNameServer: 		IPAddressSlice(config.DHCP.NameServer),
@@ -119,7 +119,7 @@ func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 		layers.DHCPOptDefaultTTL: 		Int16(config.DHCP.DefaultTTL),
 		layers.DHCPOptTCPTTL: 			Int16(config.DHCP.TCPTTL),
 
-		layers.DHCPOptHostname: 		String(config.DHCP.Hostname),
+		// layers.DHCPOptHostname: 		String(config.DHCP.Hostname),
 		// layers.DHCPOptDomainName: 		String(config.DHCP.DomainName),
 
 		layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
