@@ -4,6 +4,7 @@ import (
 	"net"
 	"fmt"
 	"log"
+	"bytes"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -177,6 +178,8 @@ func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*la
 	if !ok {
 		log.Println("Request list does not exist in Discover")
 	}
+
+	dhcpOptions = addPaddingToDHCPOptions(dhcpOptions)
 
 	var hardwareLen uint8 = 6 // MAC is commonly 6
 	var hardwareOpts uint8 = 0 // None I guess, maybe specify unicast or something
@@ -465,4 +468,26 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) {
 
 	// Send packet byte slice to sendchannel to be sent 
 	s.sendch <- buf.Bytes()
+}
+
+func addPaddingToDHCPOptions(options *layers.DHCPOptions) *layers.DHCPOptions {
+	// Determine current length of options
+	totalLength := 0
+	for _, opt := range *options {
+		totalLength += int(opt.Length) + 2 // Option type (1 byte) + length (1 byte) + data
+	}
+
+	var oop layers.DHCPOptions 
+	// Check if total length is a multiple of 4 (32 bits)
+	if totalLength%4 != 0 {
+		paddingLength := 4 - (totalLength % 4)
+		padding := layers.DHCPOption{
+			Type:   0,  // Padding uses type 0x00 (RFC 2131 padding)
+			Length: uint8(paddingLength),
+			Data:   bytes.Repeat([]byte{0x00}, paddingLength),
+		}
+		oop = append(*options, padding)
+	}
+
+	return &oop
 }
