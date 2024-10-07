@@ -120,7 +120,8 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
     ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
 
-	// dhcpLayer, _ := dhcp_packet.Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
+	foo := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
+	dhcpLayerStruct, _ := foo.Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
 	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
 
 	buf := gopacket.NewSerializeBuffer()
@@ -133,14 +134,26 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	}
 	layersToSerialize = append(layersToSerialize, ethernetLayer)
 
-	broadcastAddr := net.IP{255, 255, 255, 255}
-	offeredIP := generateAddr()
+	// HAVE TO: Decide if I should hand out the addr
+
+	// broadcastAddr := net.IP{255, 255, 255, 255}
+	// var dstIP net.IP
+	var offeredIP net.IP
+
+	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayerStruct.Options, layers.DHCPOptRequestIP)
+	if !ok {
+		log.Println("Attempted to get requested IP from discover, didn't find it, generating addr")
+		offeredIP = generateAddr() // Set offered and destination to that of requested
+	} else {
+		log.Println("Got requested IP from discover, using it")
+		offeredIP = requestedIP.Data
+	}
 
 	ipLayer := &layers.IPv4{
 		Version: 4,
 		TTL: 64,
 		SrcIP: s.serverIP, // We always respond on the DHCP ip
-		DstIP: broadcastAddr, // We set the Dest to that of the offered IP
+		DstIP: offeredIP, // We set the Dest to that of the offered IP
 		Protocol: layers.IPProtocolUDP,
 	}
 	layersToSerialize = append(layersToSerialize, ipLayer)
@@ -270,11 +283,13 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 	// }
 
 	// dhcpCIDRRoute := layers.NewDHCPOption(layers.DHCPOptClasslessStaticRoute, routeData)
+
+	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
-
 	// dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
+	dhcpOptions	= append(dhcpOptions, dhcpLeaseTime)
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	dhcpOptions = append(dhcpOptions, endOptions)
 
