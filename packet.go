@@ -127,9 +127,16 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	buf := gopacket.NewSerializeBuffer()
 	var layersToSerialize []gopacket.SerializableLayer
 
+	clientMAC, cok := dhcpUtils.GetDHCPOption(dhcpLayerStruct.Options, layers.DHCPOptClientID)
+	if !cok {
+		log.Println("Couldnt get client MAC from options")
+	}
+
 	ethernetLayer := &layers.Ethernet{
 		SrcMAC: s.serverMAC,
-		DstMAC: ethernetPacket.SrcMAC,
+		DstMAC: clientMAC, 
+		// DstMAC: ethernetPacket.SrcMAC,
+		// DstMAC: net.HardwareAddr{0xde, 0xc3, 0xb4, 0x34, 0x4b, 0x46},
 		EthernetType: layers.EthernetTypeIPv4,
 	}
 	layersToSerialize = append(layersToSerialize, ethernetLayer)
@@ -176,9 +183,15 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 
 	// Send packet byte slice to sendchannel to be sent 
 
-	log.Println("SENDING OFFER")
 
-	s.sendch <- buf.Bytes()
+	select {
+	case s.sendch <- buf.Bytes():
+		log.Println("SENDING OFFER")
+
+	default:
+		// Queue is full, log and drop packet
+		log.Printf("Send queue full, dropping packet")
+	}
 }
 
 func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*layers.DHCPv4, error) {
