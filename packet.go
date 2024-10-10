@@ -175,6 +175,9 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 	}
 
 	// Send packet byte slice to sendchannel to be sent 
+
+	log.Println("SENDING OFFER")
+
 	s.sendch <- buf.Bytes()
 }
 
@@ -192,7 +195,7 @@ func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*la
 		log.Println("Request list does not exist in Discover")
 	}
 
-	dhcpOptions = addPaddingToDHCPOptions(dhcpOptions)
+	// dhcpOptions = addPaddingToDHCPOptions(dhcpOptions)
 
 	var hardwareLen uint8 = 6 // MAC is commonly 6
 	var hardwareOpts uint8 = 0 // None I guess, maybe specify unicast or something
@@ -284,11 +287,30 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 
 	// dhcpCIDRRoute := layers.NewDHCPOption(layers.DHCPOptClasslessStaticRoute, routeData)
 
+	// hostname := []byte("iphone")
+	// clientHostName := layers.NewDHCPOption(layers.DHCPOptHostname, hostname)
+
+	// clientID, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptClientID)
+	// if ok {
+	// 	log.Println("Found client ID")
+	// 	dhcpClientIdent := layers.NewDHCPOption(layers.DHCPOptClientID, clientID.Data)
+	// 	dhcpOptions = append(dhcpOptions, dhcpClientIdent)
+	// }
+
+	// maxSize, mok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptMaxMessageSize)
+	// if mok {
+	// 	log.Println("Found maxSize")
+	// 	dhcpMaxSize := layers.NewDHCPOption(layers.DHCPOptMaxMessageSize, maxSize.Data)
+	// 	dhcpOptions = append(dhcpOptions, dhcpMaxSize)
+	// }
+
+
 	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
 	// dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
+	// dhcpOptions = append(dhcpOptions, clientHostName)
 	dhcpOptions	= append(dhcpOptions, dhcpLeaseTime)
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	dhcpOptions = append(dhcpOptions, endOptions)
@@ -402,6 +424,7 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) {
 	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
 	if !ok {
 		log.Fatalf("Error while parsing DHCPv4 layer in packet in createack")
+		return	
 	} 
 
 
