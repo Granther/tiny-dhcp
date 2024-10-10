@@ -1,6 +1,6 @@
 {
     "server": {
-        "port": 100,
+        "port": 67,
         "listenInterface": "wlp2s0",
         "numWorkers": 10
     },

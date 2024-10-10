@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	//"encoding/binary"
-	"time"
 	"os"
 
 	"github.com/google/gopacket"
@@ -134,10 +133,7 @@ func (s *Server) receivePackets() {
 func (s *Server) sendPackets() {
 	// Iterate over sendchannel, send all ready packets
 	for packet := range s.sendch {
-		// start := time.Now()
 		err := s.sendPacket(packet)
-		// elapsed := time.Since(start)
-		// log.Printf("Sending packet took %s\n", elapsed)
 		if err != nil {
 			log.Fatalf("Error occured while sending ready packet: %v", err)
 		}
@@ -154,15 +150,10 @@ func (s *Server) sendPacket(packet []byte) error {
 
 func (s *Server) worker() {
     for job := range s.packetch {
-		start := time.Now()
-
         s.workerPool <- struct{}{} 
         s.handleDHCPPacket(job.data, job.clientAddr, s.config)
-        <-s.workerPool
-
-		elapsed := time.Since(start)
-		log.Printf("Worker processed packer for %s\n", elapsed)
-    }
+        <-s.workerPool 
+	}
 }
 
 func main() {
