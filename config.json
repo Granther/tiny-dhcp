@@ -1,22 +1,22 @@
 {
     "server": {
         "port": 67,
-        "listenInterface": "Ethernet",
-        "numWorkers": 100
+        "listenInterface": "enp0s3",
+        "numWorkers": 10
     },
     "dhcp": {
-        "addrPool": ["192.168.1.20", "192.168.1.240"],
+        "addrPool": ["10.10.1.20", "10.10.1.240"],
         "subnetMask": "255.255.255.0",
         "router": [
-            "192.168.1.1"
+            "10.10.1.1"
         ],
         "timeServer": [],
         "nameServer": [],
-        "dnsServer": ["192.168.1.1", "8.8.8.8", "1.1.1.1"],
+        "dnsServer": ["10.10.1.1", "8.8.8.8", "1.1.1.1"],
         "logServer": [],
         "leaseLen": 86400,
-        "hostname": "iphone",
-        "domainName": "pefsefs.local",
+        "hostname": "",
+        "domainName": "local",
         "ipForwarding": true,
         "datagramMTU": 1500,
         "defaultTTL": 254,

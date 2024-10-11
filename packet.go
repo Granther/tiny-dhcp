@@ -336,6 +336,9 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) error {
 		log.Println("Debug: Got requested IP from request, checking availability...")
 		if database.IsIPAvailable(s.db, requestedIP) {
 			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP)
+			err := database.LeaseIP(s.db, requestedIP, mac, s.config.DHCP.LeaseLen); if err != nil {
+				return fmt.Errorf("Unable to create lease for requested IP: %w\n", err)
+			}
 		} else {
 			log.Println("Debug: Requested IP is not available, sending Nack")
 			// err := s.createNack(); if err != nil {

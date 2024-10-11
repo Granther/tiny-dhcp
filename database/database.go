@@ -26,7 +26,7 @@ func CreateLeasesTable(db *sql.DB) (error) {
         "mac" TEXT UNIQUE,
         "ip" TEXT UNIQUE,
 		"lease_len" INTEGER,
-		"leased_on" TEXT,
+		"leased_on" TEXT
     );`
 
 	_, err := db.Exec(leasesTableSQL)
@@ -36,6 +36,11 @@ func CreateLeasesTable(db *sql.DB) (error) {
 
 	return nil
 } 
+
+func FillDatabase(db *sql.DB) {
+	leasesTableSQL := `INSERT INTO leases (ip, mac, lease_len, leased_on) VALUES (?, ?, ?, ?);`
+	db.Exec(leasesTableSQL, "10.10.1.20", "0a:0a:0a:0a:0a:0a", 84600, "2006-01-02 15:04:05")
+}
 
 func ConnectDatabase() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", "./leases.db")
@@ -73,7 +78,7 @@ func IsExpired(leaseLen int, leasedOn string) (bool) {
 func IsIPAvailable(db *sql.DB, ip net.IP) (bool) {
 	var lease Lease
 
-    query := "SELECT ip, lease_len, leased_on FROM leases WHERE ip = ?"
+    query := "SELECT ip, lease_len, leased_on FROM leases WHERE ip = ?;"
     err := db.QueryRow(query, ip.String()).Scan(&lease.IP, &lease.LeaseLen, &lease.LeasedOn)
     if err != nil {
         if err == sql.ErrNoRows {
@@ -116,7 +121,7 @@ func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen int) (error) 
 	_, _ = db.Exec(leaseSelect, ip.String(), mac.String())
 
 	currentTime := time.Now().Format("2006-01-02 15:04:05")
-    insertLease := `INSERT INTO leases (ip, mac, lease_len, leased_on) VALUES (?, ?, ?, ?)`
+    insertLease := `INSERT INTO leases (ip, mac, lease_len, leased_on) VALUES (?, ?, ?, ?);`
     _, err := db.Exec(insertLease, ip.String(), mac.String(), leaseLen, currentTime)
     if err != nil {
         return fmt.Errorf("Error leasing IP: %v\n", err)
@@ -154,8 +159,8 @@ func GenerateIP(db *sql.DB) (net.IP, error) {
         ips = append(ips, net.ParseIP(lease.IP))
     }
 
-	startIP := net.IP{192, 168, 1, 20}.To4()
-	endIP := net.IP{192, 168, 1, 220}.To4()
+	startIP := net.IP{10, 10, 1, 20}.To4()
+	endIP := net.IP{10, 10, 1, 220}.To4()
 
 	for ip := startIP; !IsIPEqual(ip, endIP); ip = IncrementIP(ip) {
 		if !IPsContains(ips, ip) {
