@@ -161,7 +161,7 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) (error) {
 	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayerStruct.Options, layers.DHCPOptRequestIP)
 	if !ok {
 		log.Println("Attempted to get requested IP from discover, didn't find it, generating addr")
-		offeredIP, err := database.GenerateIP(s.db); if err != nil {
+		offeredIP, err = database.GenerateIP(s.db); if err != nil {
 			return fmt.Errorf("%w", err)
 		}
 	} else {
@@ -171,8 +171,13 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) (error) {
 			offeredIP = requestedIP.Data
 		} else {
 			log.Println("Debug: Generating IP because requested one is not available")
-			offeredIP, err := database.GenerateIP(s.db); if err != nil {
-				return fmt.Errorf("%w", err)
+			oldIP := database.IsMACLeased(s.db, mac)
+			if oldIP != nil {
+				offeredIP = oldIP
+			} else {
+				offeredIP, err = database.GenerateIP(s.db); if err != nil {
+					return fmt.Errorf("%w", err)
+				}
 			}
 		}
 	}
