@@ -11,6 +11,7 @@ import (
 
 	c "gdhcp/config"
 	dhcpUtils "gdhcp/dhcp"
+	database "gdhcp/database"
 )
 
 
@@ -157,14 +158,23 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) (error) {
 	layersToSerialize = append(layersToSerialize, ethernetLayer)
 
 	var offeredIP net.IP
-
 	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayerStruct.Options, layers.DHCPOptRequestIP)
 	if !ok {
 		log.Println("Attempted to get requested IP from discover, didn't find it, generating addr")
-		offeredIP = generateAddr() // Set offered and destination to that of requested
+		offeredIP, err := database.GenerateIP(s.db); if err != nil {
+			return fmt.Errorf("%w", err)
+		}
 	} else {
-		log.Println("Got requested IP from discover, using it")
-		offeredIP = requestedIP.Data
+		log.Println("Debug: Got requested IP from discover, checking availability...")
+		if database.IsIPAvailable(s.db, requestedIP.Data) {
+			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP.Data)
+			offeredIP = requestedIP.Data
+		} else {
+			log.Println("Debug: Generating IP because requested one is not available")
+			offeredIP, err := database.GenerateIP(s.db); if err != nil {
+				return fmt.Errorf("%w", err)
+			}
+		}
 	}
 
 	ipLayer := &layers.IPv4{
