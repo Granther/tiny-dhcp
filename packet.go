@@ -4,7 +4,8 @@ import (
 	"net"
 	"fmt"
 	"log"
-	"bytes"
+	// "bytes"
+	"slices"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -317,25 +318,29 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) error {
 	}
 	layersToSerialize = append(layersToSerialize, ethernetLayer)
 
-	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayerStruct.Options, layers.DHCPOptRequestIP)
+	var requestedIP net.IP
+	requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	if !ok {
-		log.Println("Debug: Attempted to get requested IP from reqyest, didn't find it, exiting")
-		return fmt.Errorf("Requested IP option not in request??")
+		log.Println("Debug: Attempted to get requested IP from request, didn't find it, exiting")
+		return fmt.Errorf("Requested IP option not in request")
 	} else {
-		oldIP := database.IsMACLeased(mac)
-		if slices.Compare(oldIP, requestedIP.Data) == 0 {
-			log.Println("Mac is leased and it is leased to the requested IP")
-			
+		requestedIP = requestedIPOpt.Data
+		oldIP := database.IsMACLeased(s.db, mac)
+		if slices.Compare(oldIP, requestedIP) == 0 {
+			log.Println("Mac is leased and it is leased to the requested IP, renewing...")
+			// Renew the ip lease
+			err := database.LeaseIP(s.db, requestedIP, mac, s.config.DHCP.LeaseLen); if err != nil {
+				return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
+			}
 		}
 		log.Println("Debug: Got requested IP from request, checking availability...")
-		if database.IsIPAvailable(s.db, requestedIP.Data) {
-			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP.Data)
-			offeredIP = requestedIP.Data
+		if database.IsIPAvailable(s.db, requestedIP) {
+			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP)
 		} else {
 			log.Println("Debug: Requested IP is not available, sending Nack")
-			err := s.createNack(); if err != nil {
-				return fmt.Errorf("Error sending nack in response to request")
-			}
+			// err := s.createNack(); if err != nil {
+			// 	return fmt.Errorf("Error sending nack in response to request")
+			// }
 		}
 	}
 
@@ -357,7 +362,7 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) error {
 	udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
 	layersToSerialize = append(layersToSerialize, udpLayer)
 
-	dhcpLayerConst, _ := s.ConstructAckLayer(packet_slice, requestedIp.Data) // Returns pointer to what was affected
+	dhcpLayerConst, _ := s.ConstructAckLayer(packet_slice, requestedIP) // Returns pointer to what was affected
 	layersToSerialize = append(layersToSerialize, dhcpLayerConst)
 
 	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}, layersToSerialize...); err != nil {
