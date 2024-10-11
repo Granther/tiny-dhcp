@@ -5,9 +5,18 @@ import (
     "log"
 	"fmt"
 	"net"
+	"time"
 
     _ "github.com/mattn/go-sqlite3"
 )
+
+type Lease struct {
+	ID			int
+	IP			string
+	MAC			string
+	LeaseLen	int
+	LeasedOn	string
+}
 
 func SetupDatabase() {
 	db, err := sql.Open("sqlite3", "./leases.db")
@@ -73,11 +82,43 @@ func ConnectDatabase() (*sql.DB, error) {
 	return db, nil
 }
 
-func IsIPLeased(db *sql.DB, ip net.IP) (bool, error) {
-	return false, nil
+func IsExpired(leaseLen int, leasedOn string) (bool) {
+	format := "2006-01-02 15:04:05"
+
+	leasedOnTime, err := time.Parse(format, leasedOn)
+	if err != nil {
+		return true
+	}
+
+	timeSince := time.Since(leasedOnTime)
+
+	if int(timeSince.Seconds()) >= leaseLen {
+		return true
+	}
+
+	return false
 }
 
-func IsMACLeased(db *sql.DB, mac net.HardwareAddr) (bool, error) {
+func IsIPAvailable(db *sql.DB, ip net.IP) (bool, error) {
+	var lease Lease
+
+    query := "SELECT ip, lease_len, leased_on FROM leases WHERE ip = ?"
+    err := db.QueryRow(query, ip.String()).Scan(&lease.IP, &lease.LeaseLen, &lease.LeasedOn)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            log.Println("No lease found for that IP")
+            return true, nil
+        }
+        return false, err
+    }
+
+	if IsExpired(lease.LeaseLen, lease.LeasedOn) {
+		return true, nil
+	}
+    return false, nil
+}
+
+func IsMACAvailable(db *sql.DB, mac net.HardwareAddr) (bool, error) {
 	return false, nil
 }
 
