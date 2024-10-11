@@ -438,3 +438,30 @@ package test
 // 	// Send packet byte slice to sendchannel to be sent 
 // 	s.sendch <- buf.Bytes()
 // }
+
+	// network := "192.168.1.0/24"
+	// nextHop := net.ParseIP("192.168.1.1")
+
+	// routeData, err := createClasslessStaticRoute(network, nextHop)
+	// if err != nil {
+	// 	fmt.Println("Error:", err)
+	// }
+
+	// dhcpCIDRRoute := layers.NewDHCPOption(layers.DHCPOptClasslessStaticRoute, routeData)
+
+	// hostname := []byte("iphone")
+	// clientHostName := layers.NewDHCPOption(layers.DHCPOptHostname, hostname)
+
+	// clientID, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptClientID)
+	// if ok {
+	// 	log.Println("Found client ID")
+	// 	dhcpClientIdent := layers.NewDHCPOption(layers.DHCPOptClientID, clientID.Data)
+	// 	dhcpOptions = append(dhcpOptions, dhcpClientIdent)
+	// }
+
+	// maxSize, mok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptMaxMessageSize)
+	// if mok {
+	// 	log.Println("Found maxSize")
+	// 	dhcpMaxSize := layers.NewDHCPOption(layers.DHCPOptMaxMessageSize, maxSize.Data)
+	// 	dhcpOptions = append(dhcpOptions, dhcpMaxSize)
+	// }
