@@ -139,7 +139,16 @@ func IsMACLeased(db *sql.DB, mac net.HardwareAddr) (net.IP) {
     return net.ParseIP(lease.IP)
 }
 
-func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen int, leasedOn string) (error) {
+func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen int) (error) {
+
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+
+    insertLease := `INSERT INTO leases (ip, mac, lease_len, leased_on) VALUES (?, ?, ?, ?)`
+    _, err = db.Exec(insertLease, ip.String(), mac.String(), leaseLen, currentTime)
+    if err != nil {
+        return fmt.Errorf("Error leasing IP: %v\n", err)
+    }
+
 	return nil
 }
 
