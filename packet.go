@@ -322,6 +322,11 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) error {
 		log.Println("Debug: Attempted to get requested IP from reqyest, didn't find it, exiting")
 		return fmt.Errorf("Requested IP option not in request??")
 	} else {
+		oldIP := database.IsMACLeased(mac)
+		if slices.Compare(oldIP, requestedIP.Data) == 0 {
+			log.Println("Mac is leased and it is leased to the requested IP")
+			
+		}
 		log.Println("Debug: Got requested IP from request, checking availability...")
 		if database.IsIPAvailable(s.db, requestedIP.Data) {
 			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP.Data)
@@ -333,6 +338,8 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) error {
 			}
 		}
 	}
+
+	log.Printf("Requested IP: %v\n", requestedIP.String())
 
 	ipLayer := &layers.IPv4{
 		Version: 4,

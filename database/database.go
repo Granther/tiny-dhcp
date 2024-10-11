@@ -52,7 +52,9 @@ func CreateLeasesTable(db *sql.DB) (error) {
 	leasesTableSQL := `CREATE TABLE IF NOT EXISTS leases (
         "id" INTEGER PRIMARY KEY AUTOINCREMENT,
         "mac" TEXT,
-        "ip" TEXT
+        "ip" TEXT,
+		"lease_len" INTEGER,
+		"leased_on" TEXT,
     );`
 
 	_, err := db.Exec(leasesTableSQL)
