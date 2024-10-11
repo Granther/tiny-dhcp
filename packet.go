@@ -182,6 +182,8 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) (error) {
 		}
 	}
 
+	log.Printf("Offered IP: %v\n", offeredIP.String())
+
 	ipLayer := &layers.IPv4{
 		Version: 4,
 		TTL: 64,

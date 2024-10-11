@@ -192,7 +192,9 @@ func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, 
 	switch message, _ := dhcpUtils.GetMessageTypeOption(dhcp.Options); message {
 	case layers.DHCPMsgTypeDiscover:
 		log.Printf("Got Discover")
-		s.createOffer(packet_slice, config)
+		err := s.createOffer(packet_slice, config); if err != nil {
+			log.Printf("Error creating offer: %w\n", err)
+		}
 	case layers.DHCPMsgTypeRequest:
 		log.Printf("Got Request")
 		// s.createNack(packet_slice, config)

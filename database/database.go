@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"time"
+	"slices"
 
     _ "github.com/mattn/go-sqlite3"
 )
@@ -67,7 +68,6 @@ func ConnectDatabase() (*sql.DB, error) {
     if err != nil {
         return nil, fmt.Errorf("Error occured when connecting to leases.db: %v", err)
     }
-    defer db.Close()
 
     err = db.Ping()
     if err != nil {
@@ -152,62 +152,83 @@ func GenerateIP(db *sql.DB) (net.IP, error) {
 
     rows, err := db.Query(query)
     if err != nil {
-        return nil, ftm.Errorf("%w\n", err)
+        return nil, fmt.Errorf("%w\n", err)
     }
     defer rows.Close()
 
-    var leases []Lease
+    var ips []net.IP
     for rows.Next() {
         var lease Lease
         err = rows.Scan(&lease.ID, &lease.IP)
         if err != nil {
-            return nil fmt.Errorf("%w\n", err)
+			if err == sql.ErrNoRows {
+				break
+			}
+            return nil, fmt.Errorf("%w\n", err)
         }
 
 		log.Printf("Leased IP: %v\n", lease.IP)
 
-        leases = append(leases, lease)
+        ips = append(ips, net.ParseIP(lease.IP))
     }
 
-	return nil, nil
+	startIP := net.IP{192, 168, 1, 20}.To4()
+	endIP := net.IP{192, 168, 1, 220}.To4()
+
+	for ip := startIP; !IsIPEqual(ip, endIP); ip = IncrementIP(ip) {
+		if !IPsContains(ips, ip) {
+			return ip, nil 
+		}
+	}
+
+	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
 }
 
-    // // Open the database connection
-    // db, err := sql.Open("sqlite3", "./example.db")
-    // if err != nil {
-    //     log.Fatal(err)
-    // }
-    // defer db.Close()
+func IPsContains(ips []net.IP, ip net.IP) bool {
+	for _, item := range ips {
+		if slices.Compare(item, ip) == 0 {
+			return true
+		}
+		log.Println(item.String())
+	}
 
-    // // Create a SELECT query
-    // query := "SELECT id, name, age FROM users"
+	return false
+}
 
-    // // Execute the query, getting a result set
-    // rows, err := db.Query(query)
-    // if err != nil {
-    //     log.Fatal(err)
-    // }
-    // defer rows.Close()
+// // Function to iterate over the IP pool
+// func iterateIPPool(startIP, endIP string) {
+// 	// Parse the start and end IPs
+// 	start := net.ParseIP(startIP).To4()
+// 	end := net.ParseIP(endIP).To4()
 
-    // // Loop through the result set
-    // var users []User
-    // for rows.Next() {
-    //     var user User
-    //     // Read the columns (id, name, age) into variables
-    //     err = rows.Scan(&user.ID, &user.Name, &user.Age)
-    //     if err != nil {
-    //         log.Fatal(err)
-    //     }
-    //     users = append(users, user)
-    // }
+// 	if start == nil || end == nil {
+// 		fmt.Println("Invalid IP address")
+// 		return
+// 	}
 
-    // // Check for errors after iterating through the rows
-    // err = rows.Err()
-    // if err != nil {
-    //     log.Fatal(err)
-    // }
+// 	// Iterate from start IP to end IP
+// 	for ip := start; !ipEqual(ip, end); ip = incrementIP(ip) {
+// 		fmt.Println(ip)
+// 	}
 
-    // // Print the results
-    // for _, user := range users {
-    //     fmt.Printf("ID: %d, Name: %s, Age: %d\n", user.ID, user.Name, user.Age)
-    // }
+// 	// Print the last IP
+// 	fmt.Println(end)
+// }
+
+// // Function to increment the last octet of the IP address
+func IncrementIP(ip net.IP) net.IP {
+	newIP := make(net.IP, len(ip))
+	copy(newIP, ip)
+
+	for i := len(newIP) - 1; i >= 0; i-- {
+		newIP[i]++
+		if newIP[i] != 0 {
+			break
+		}
+	}
+	return newIP
+}
+
+func IsIPEqual(ip1, ip2 net.IP) bool {
+	return ip1.Equal(ip2)
+}
