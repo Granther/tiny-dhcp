@@ -38,4 +38,5 @@
 - Read to see if I need to return something or do something
 - Like a T1 or T2 that specifies I renew a lease
 
-SERVER HAS TO LISTEN ON BROADCAST, YOU HAVET HE IQ OF A ROCK
+### Locally Administered MAC
+- Have option for shorter lease time when MAC is locally assigned

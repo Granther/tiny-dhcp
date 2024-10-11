@@ -115,14 +115,27 @@ func createClasslessStaticRoute(network string, nextHop net.IP) ([]byte, error) 
 	return data, nil
 }
 
+// Fixes mac addr to be correct size if sent as locally administered, returns true if LA'd
+func processMAC(mac net.HardwareAddr) (net.HardwareAddr, bool, error) {
+	if len(mac) > 6 {
+		log.Println("Debug: Mac is larger than 6 bytes, fixing...")
+		mac = mac[1:]
+		return mac, true, nil
+	} else if len(mac) == 6 {
+		log.Println("Debug: Mac is good")
+		return mac, false, nil
+	} else {
+		return net.HardwareAddr{}, false, fmt.Errorf("Error processing mac addr")
+	}
+}
 
-func (s *Server) createOffer(packet_slice []byte, config c.Config) {
-	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
-    ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
+func (s *Server) createOffer(packet_slice []byte, config c.Config) (error) {
+	// dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeEthernet, gopacket.Default)
+    // ethLayer := dhcp_packet.Layer(layers.LayerTypeEthernet)
 
 	foo := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
 	dhcpLayerStruct, _ := foo.Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
-	ethernetPacket, _ := ethLayer.(*layers.Ethernet)
+	// ethernetPacket, _ := ethLayer.(*layers.Ethernet)
 
 	buf := gopacket.NewSerializeBuffer()
 	var layersToSerialize []gopacket.SerializableLayer
@@ -132,19 +145,17 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 		log.Println("Couldnt get client MAC from options")
 	}
 
+	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data)); if err != nil {
+		return fmt.Errorf("Error processing mac to usable form: %v", err)
+	}
+
 	ethernetLayer := &layers.Ethernet{
 		SrcMAC: s.serverMAC,
-		DstMAC: clientMAC, 
-		// DstMAC: ethernetPacket.SrcMAC,
-		// DstMAC: net.HardwareAddr{0xde, 0xc3, 0xb4, 0x34, 0x4b, 0x46},
+		DstMAC: mac, 
 		EthernetType: layers.EthernetTypeIPv4,
 	}
 	layersToSerialize = append(layersToSerialize, ethernetLayer)
 
-	// HAVE TO: Decide if I should hand out the addr
-
-	// broadcastAddr := net.IP{255, 255, 255, 255}
-	// var dstIP net.IP
 	var offeredIP net.IP
 
 	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayerStruct.Options, layers.DHCPOptRequestIP)
@@ -177,21 +188,13 @@ func (s *Server) createOffer(packet_slice []byte, config c.Config) {
 
 	// Serialize the packet layers into the buffer
 	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}, layersToSerialize...); err != nil {
-		fmt.Printf("error serializing packet: %w", err)
-		return
+		return fmt.Errorf("error serializing packet: %w", err)
 	}
 
-	// Send packet byte slice to sendchannel to be sent 
+	log.Println("Sending offer packet")
+	s.sendch <- buf.Bytes()
 
-
-	select {
-	case s.sendch <- buf.Bytes():
-		log.Println("SENDING OFFER")
-
-	default:
-		// Queue is full, log and drop packet
-		log.Printf("Send queue full, dropping packet")
-	}
+	return nil 
 }
 
 func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*layers.DHCPv4, error) {

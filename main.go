@@ -6,6 +6,7 @@ import (
 	"log"
 	//"encoding/binary"
 	"os"
+	"database/sql"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
@@ -16,6 +17,7 @@ import (
 	dhcpUtils "gdhcp/dhcp"
 	deviceUtils "gdhcp/device"
 	options "gdhcp/options"
+	database "gdhcp/database"
 )
 
 type Server struct {
@@ -25,6 +27,7 @@ type Server struct {
 	serverMAC	net.HardwareAddr
 	config		c.Config
 	optionsMap	map[layers.DHCPOpt]options.DHCPOptionValue
+	db			*sql.DB
 	workerPool	chan struct{}
 	packetch 	chan packetJob
 	sendch		chan []byte
@@ -45,7 +48,7 @@ func NewServer(config c.Config) (*Server, error) {
 
 	serverIP, err := deviceUtils.GetUDPAddr(iface)
 	if err != nil {
-		log.Fatalf("Error occured while creating listen address struct, please review the interface configuration: %w", err)
+		log.Fatalf("Error occured while creating listen address struct, please review the interface configuration: %w\n", err)
 		os.Exit(1)
 	}
 	
@@ -53,7 +56,7 @@ func NewServer(config c.Config) (*Server, error) {
 	listenAddr := net.UDPAddr{IP: net.IP{0, 0, 0, 0},  Port: 67}
 	conn, err := net.ListenUDP("udp", &listenAddr)
 	if err != nil {
-        return nil, fmt.Errorf("Error creating server UDP listener: %v", err)
+        return nil, fmt.Errorf("Error creating server UDP listener: %v\n", err)
     }
 
 	// WINDOWS DEV
@@ -63,14 +66,16 @@ func NewServer(config c.Config) (*Server, error) {
 	// Create handle for responding to requests later on
 	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
-		return nil, fmt.Errorf("Could not open pcap device: %w", err)
+		return nil, fmt.Errorf("Could not open pcap device: %w\n", err)
 	}
 
 	optionsMap := options.CreateOptionMap(config)
 	numWorkers := config.Server.NumWorkers
 
-	// fmt.Println("%v", optionsMap[layers.DHCPOptBroadcastAddr])
-	// fmt.Println("%v", optionsMap[layers.DHCPOptRouter])
+	db, err := database.ConnectDatabase()
+	if err != nil {
+		return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
+	}
 
 	return &Server{
 		conn:		conn,
@@ -79,6 +84,7 @@ func NewServer(config c.Config) (*Server, error) {
 		serverMAC:	iface.HardwareAddr,
 		config:		config,
 		optionsMap: optionsMap,
+		db:			db,
 		workerPool:	make(chan struct{}, numWorkers),
 		packetch:	make(chan packetJob, 1000), // Can hold 1000 packets
 		sendch:		make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
