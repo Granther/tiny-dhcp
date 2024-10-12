@@ -4,7 +4,6 @@ import (
 	"net"
 	"fmt"
 	"log"
-	// "bytes"
 	"slices"
 
 	"github.com/google/gopacket"
