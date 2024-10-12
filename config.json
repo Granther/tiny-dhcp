@@ -2,7 +2,8 @@
     "server": {
         "port": 67,
         "listenInterface": "enp0s3",
-        "numWorkers": 10
+        "numWorkers": 10,
+        "logLevel": "debug"
     },
     "dhcp": {
         "addrPool": ["10.10.1.20", "10.10.1.240"],

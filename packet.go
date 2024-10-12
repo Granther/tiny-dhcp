@@ -198,13 +198,10 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
-	// dhcpOptions = append(dhcpOptions, dhcpCIDRRoute)
-	// dhcpOptions = append(dhcpOptions, clientHostName)
 	dhcpOptions	= append(dhcpOptions, dhcpLeaseTime)
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	dhcpOptions = append(dhcpOptions, endOptions)
 
-	// We return a pointer so we can append other things later, such as opt 255
 	return &dhcpOptions, true
 }
 

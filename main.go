@@ -4,6 +4,7 @@ import (
 	"net"
 	"fmt"
 	"log"
+	"log/slog"
 	//"encoding/binary"
 	"os"
 	"database/sql"
@@ -162,12 +163,28 @@ func (s *Server) worker() {
 	}
 }
 
+func CreateLogger(logLevel string) {
+	levels := map[string]slog.Level{
+		"debug": slog.LevelDebug,
+		"info": slog.LevelInfo,
+	}
+	
+	handlerOpts := &slog.HandlerOptions{
+		Level: levels[logLevel],
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
+	slog.SetDefault(logger)
+}
+
 func main() {
 	config, err := c.ReadConfig("."); if err != nil {
 		log.Fatalf("Error parsing config file: %v", err)
 		os.Exit(1)
 		return
 	}
+
+	CreateLogger(config.Server.LogLevel)
 
 	server, err := NewServer(config)
 	if err != nil {
