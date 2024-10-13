@@ -3,12 +3,14 @@ package database
 import (
     "database/sql"
     "log"
+	"log/slog"
 	"fmt"
 	"net"
 	"time"
 	"slices"
 
     _ "github.com/mattn/go-sqlite3"
+	c "gdhcp/config"
 )
 
 type Lease struct {
@@ -100,22 +102,25 @@ func IsMACLeased(db *sql.DB, mac net.HardwareAddr) (net.IP) {
     err := db.QueryRow(query, mac.String()).Scan(&lease.IP, &lease.MAC, &lease.LeaseLen, &lease.LeasedOn)
     if err != nil {
         if err == sql.ErrNoRows {
-            log.Println("MAC does not have a lease")
+            slog.Debug("MAC does not have a lease")
 			return nil        
 		}
 		// Actual error return
+		slog.Error("Unexpected error while querying for mac lease")
         return nil
     }
 
 	if IsExpired(lease.LeaseLen, lease.LeasedOn) {
+		slog.Debug("Mac was leased, but is expired")
 		return nil
 	}
 
-    return net.ParseIP(lease.IP)
+	ip := net.ParseIP(lease.IP)
+	slog.Debug(fmt.Sprintf("Mac had lease to ip: %v", ip))
+    return ip
 }
 
 func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen int) (error) {
-
 	leaseSelect := `DELETE FROM leases WHERE ip = ? AND mac = ?;`
 	_, _ = db.Exec(leaseSelect, ip.String(), mac.String())
 
@@ -133,7 +138,7 @@ func UnleaseIP(db *sql.DB, ip net.IP) (error) {
 	return nil
 }
 
-func GenerateIP(db *sql.DB) (net.IP, error) {
+func GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
     query := "SELECT id, ip FROM leases"
 
     rows, err := db.Query(query)
@@ -153,13 +158,11 @@ func GenerateIP(db *sql.DB) (net.IP, error) {
             return nil, fmt.Errorf("%w\n", err)
         }
 
-		log.Printf("Leased IP: %v\n", lease.IP)
-
         ips = append(ips, net.ParseIP(lease.IP))
     }
 
-	startIP := net.IP{10, 10, 1, 20}.To4()
-	endIP := net.IP{10, 10, 1, 220}.To4()
+	startIP := net.ParseIP(config.DHCP.AddrPool[0])
+	endIP := net.ParseIP(config.DHCP.AddrPool[1])
 
 	for ip := startIP; !IsIPEqual(ip, endIP); ip = IncrementIP(ip) {
 		if !IPsContains(ips, ip) {
@@ -179,6 +182,17 @@ func IPsContains(ips []net.IP, ip net.IP) bool {
 	}
 
 	return false
+}
+
+func UnleaseMAC(db *sql.DB, mac net.HardwareAddr) error {
+	leaseSelect := `DELETE FROM leases WHERE mac = ?;`
+	_, err := db.Exec(leaseSelect, mac.String())
+
+    if err != nil {
+        return fmt.Errorf("Error deleting MAC's lease: %v\n", err)
+    }
+
+	return nil
 }
 
 // // Function to iterate over the IP pool

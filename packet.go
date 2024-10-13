@@ -85,7 +85,7 @@ func (s *Server) constructNackLayer(requestDhcpLayer *layers.DHCPv4) (*layers.DH
 	return dhcpLayer, nil
 }
 
-func (s *Server) readRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
+func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgType) (*layers.DHCPOptions, bool) {
 	// Get RequestParams Option from layer.Options
 	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
 	if !ok {
@@ -94,7 +94,7 @@ func (s *Server) readRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 
 	dhcpOptions := layers.DHCPOptions{}
 	
-	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(msgType)})
 	dhcpOptions = append(dhcpOptions, msgTypeOption)
 	// Iterate over Request List, get option requested 
 	for _, req := range requestList.Data {
@@ -165,13 +165,13 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	if !ok {
 		log.Println("Attempted to get requested IP from discover, didn't find it, generating addr")
-		offeredIP, err = database.GenerateIP(s.db); if err != nil {
+		offeredIP, err = database.GenerateIP(s.db, &s.config); if err != nil {
 			return fmt.Errorf("%w", err)
 		}
 	} else {
 		log.Println("Debug: Got requested IP from discover, checking availability...")
 		if database.IsIPAvailable(s.db, requestedIP.Data) {
-			slog.Debug("Looks like its available, using it: %v\n", requestedIP.Data)
+			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIP.Data))
 			offeredIP = requestedIP.Data
 		} else {
 			slog.Debug("Generating IP because requested one is not available")
@@ -179,8 +179,8 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 			if oldIP != nil {
 				offeredIP = oldIP
 			} else {
-				offeredIP, err = database.GenerateIP(s.db); if err != nil {
-					return fmt.Errorf("%w", err)
+				offeredIP, err = database.GenerateIP(s.db, &s.config); if err != nil {
+					return fmt.Errorf("%v", err)
 				}
 			}
 		}
@@ -194,14 +194,14 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	}
 	packetBuf := *packetPtr
 
-	slog.Info("Offering Ip: %v to client mac: %v", offeredIP.String(), clientMAC.String())
+	slog.Info(fmt.Sprintf("Offering Ip: %v to client mac: %v", offeredIP.String(), clientMAC.String()))
 	s.sendch <- packetBuf.Bytes()
 
 	return nil 
 }
 
 func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
-	dhcpOptions, ok := s.readRequestList(discoverLayer)
+	dhcpOptions, ok := s.readRequestList(discoverLayer, layers.DHCPMsgTypeOffer)
 	if !ok {
 		slog.Warn("Request list does not exist in Discover")
 	}
@@ -223,28 +223,40 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 }
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
-	clientMAC, err := extractMAC(dhcpLayer); if err != nil {
-		return err
-	}
+	// clientMAC, err := extractMAC(dhcpLayer); if err != nil {
+	// 	return err
+	// }
+
+	clientMAC := dhcpLayer.ClientHWAddr
+
+	slog.Debug("Extracted MAc")
 
 	var requestedIP net.IP
 	requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	if !ok {
-		log.Println("Debug: Attempted to get requested IP from request, didn't find it, exiting")
+		log.Println("Debug: Attempted to get requested IP from request, didn't find it")
 		return fmt.Errorf("Requested IP option not in request")
 	} else {
 		requestedIP = requestedIPOpt.Data
 		oldIP := database.IsMACLeased(s.db, clientMAC)
+		slog.Debug(fmt.Sprintf("Old IP: %v, %v", oldIP.String(), requestedIP.String()))
+		// If not true, usually meanse requested ip is not one in db, need to flush mac
 		if slices.Compare(oldIP, requestedIP) == 0 {
 			slog.Debug("Mac is leased and it is leased to the requested IP, renewing...")
 			// Renew the ip lease
 			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
 				return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
 			}
+		} else if oldIP != nil {
+			slog.Debug("Looks like requested IP is different than the stored one, flushing mac")
+			err := database.UnleaseMAC(s.db, clientMAC) 
+			if err != nil {
+				return fmt.Errorf("Error configuring mac for leasing: %v", err)
+			}
 		}
 		log.Println("Debug: Got requested IP from request, checking availability...")
 		if database.IsIPAvailable(s.db, requestedIP) {
-			slog.Debug("Looks like its available, using it: %v\n", requestedIP)
+			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIP))
 			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
 				return fmt.Errorf("Unable to create lease for requested IP: %w\n", err)
 			}
@@ -265,16 +277,16 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	}
 	packetBuf := *packetPtr
 
-	slog.Info("Acking requested Ip: %v to client mac: %v", requestedIP.String(), clientMAC.String())
+	slog.Info(fmt.Sprintf("Acking requested Ip: %v to client mac: %v", requestedIP.String(), clientMAC.String()))
 	s.sendch <- packetBuf.Bytes()
 
 	return nil 
 }
 
 func (s *Server) constructAckLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
-	dhcpOptions, ok := s.readRequestList(requestLayer)
+	dhcpOptions, ok := s.readRequestList(requestLayer, layers.DHCPMsgTypeAck)
 	if !ok {
-		slog.Warn("Request list does not exist in Discover")
+		slog.Warn("Request list does not exist in request")
 	}
 
 	// var flags uint16 = 0x8000

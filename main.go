@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	"io"
+	// "io"
 	"net"
 	"fmt"
 	"log"
@@ -156,7 +156,9 @@ func (s *Server) sendPacket(packet []byte) error {
 func (s *Server) worker() {
     for job := range s.packetch {
         s.workerPool <- struct{}{} 
-        s.handleDHCPPacket(job.data, job.clientAddr, s.config)
+        err := s.handleDHCPPacket(job.data, job.clientAddr, s.config); if err != nil {
+			slog.Error(fmt.Sprintf("Error occured while handline dhcp packet: %v", err))
+		}
         <-s.workerPool 
 	}
 }
@@ -171,13 +173,13 @@ func CreateLogger(logLevel string, logsDir string) {
 		Level: levels[logLevel],
 	}
 
-	file, err := os.OpenFile(fmt.Sprintf("%v/logs.log", logsDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0777)
-    if err != nil {
-        log.Fatalf("Failed to open log file: %v", err)
-    }
+	// file, err := os.OpenFile(fmt.Sprintf("%v/logs.log", logsDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0777)
+    // if err != nil {
+    //     log.Fatalf("Failed to open log file: %v", err)
+    // }
 
-    multiWriter := io.MultiWriter(os.Stderr, file)
-	logger := slog.New(slog.NewTextHandler(multiWriter, handlerOpts))
+    // multiWriter := io.MultiWriter(os.Stderr, file)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
 	slog.SetDefault(logger)
 }
 
@@ -189,7 +191,6 @@ func main() {
 	}
 
 	CreateLogger(config.Server.LogLevel, config.Server.LogsDir)
-	slog.Info("Glorp log")
 
 	server, err := NewServer(config)
 	if err != nil {

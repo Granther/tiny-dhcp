@@ -10,6 +10,7 @@ import (
 )
 
 type DHCP struct {
+	AddrPool		[]string `json:"addrPool"`
 	SubnetMask      string   `json:"subnetMask"`
 	Router          []string `json:"router"`
 	TimeServer      []string `json:"timeServer"`
@@ -86,6 +87,7 @@ func GetDefaultConfig() *Config {
 			LogsDir: "./logs",
         },
         DHCP: DHCP {
+			AddrPool: []string{"192.168.1.20", "192.168.1.240"},
             SubnetMask: "255.255.255.0",
             Router: []string{"192.168.1.1"},
 			TimeServer:		[]string{},
