@@ -195,27 +195,23 @@ func main() {
 }
 
 // Function to handle a DHCP packet in a new goroutine
-func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, config c.Config) {
-	dhcp_packet := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
-	dhcp_layer := dhcp_packet.Layer(layers.LayerTypeDHCPv4)
-
-	// If nil, essentially drop the packet
-	if dhcp_packet == nil || dhcp_layer == nil{
-		log.Printf("Error, unable to get DHCP packet or layer")
-		return
+func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, config c.Config) error {
+	dhcpLayer, ok := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
+	if !ok {
+		return fmt.Errorf("Error getting dhcp layer from packet")
 	}
-	dhcp, _ := dhcp_layer.(*layers.DHCPv4)
 
-	switch message, _ := dhcpUtils.GetMessageTypeOption(dhcp.Options); message {
+	switch message, _ := dhcpUtils.GetMessageTypeOption(dhcpLayer.Options); message {
 	case layers.DHCPMsgTypeDiscover:
-		log.Printf("Got Discover")
-		err := s.createOffer(packet_slice, config); if err != nil {
-			log.Printf("Error creating offer: %w\n", err)
+		slog.Debug("Got Discover")
+		err := s.createOffer(dhcpLayer); if err != nil {
+			return fmt.Errorf("Error creating offer: %w\n", err)
 		}
 	case layers.DHCPMsgTypeRequest:
-		log.Printf("Got Request")
-		// s.createNack(packet_slice, config)
-		s.createAck(packet_slice, config)
+		slog.Debug("Got Request")
+		err := s.processRequest(dhcpLayer); if err != nil {
+			fmt.Errorf("Error creating Ack: %w\n", err)
+		}
 	case layers.DHCPMsgTypeOffer:
 		log.Printf("Got Offer")
 	case layers.DHCPMsgTypeDecline:
@@ -231,9 +227,13 @@ func (s *Server) handleDHCPPacket(packet_slice []byte, clientAddr *net.UDPAddr, 
 	case layers.DHCPMsgTypeUnspecified:
 		log.Printf("Error, DHCP operation type is unspecified")
 	}
+
+	return nil
 }
 
-func generateAddr() (net.IP) {
-	return net.IP{192, 168, 1, 23}
-}
-
+// If nil, essentially drop the packet
+// if dhcp_packet == nil || dhcp_layer == nil{
+// 	log.Printf("Error, unable to get DHCP packet or layer")
+// 	return
+// }
+// dhcp, _ := dhcp_layer.(*layers.DHCPv4)

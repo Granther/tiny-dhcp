@@ -10,7 +10,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 
-	c "gdhcp/config"
 	dhcpUtils "gdhcp/dhcp"
 	database "gdhcp/database"
 )
@@ -18,11 +17,11 @@ import (
 // Fixes mac addr to be correct size if sent as locally administered, returns true if LA'd
 func processMAC(mac net.HardwareAddr) (net.HardwareAddr, bool, error) {
 	if len(mac) > 6 {
-		log.Println("Debug: Mac is larger than 6 bytes, fixing...")
+		slog.Debug("Mac is larger than 6 bytes, fixing...")
 		mac = mac[1:]
 		return mac, true, nil
 	} else if len(mac) == 6 {
-		log.Println("Debug: Mac is good")
+		slog.Debug("Mac is good")
 		return mac, false, nil
 	} else {
 		return net.HardwareAddr{}, false, fmt.Errorf("Error processing mac addr")
@@ -40,6 +39,42 @@ func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
 	}
 
 	return mac, nil
+}
+
+func (s *Server) readRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
+	// Get RequestParams Option from layer.Options
+	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
+	if !ok {
+		return nil, false
+	}
+
+	dhcpOptions := layers.DHCPOptions{}
+	
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
+	dhcpOptions = append(dhcpOptions, msgTypeOption)
+	// Iterate over Request List, get option requested 
+	for _, req := range requestList.Data {
+		if s.optionsMap[layers.DHCPOpt(req)] == nil {
+			continue
+		}
+		r := s.optionsMap[layers.DHCPOpt(req)].ToBytes()
+		if r == nil {
+			continue
+		}
+
+		op := layers.NewDHCPOption(layers.DHCPOpt(req), r) 
+		dhcpOptions = append(dhcpOptions, op)
+	}
+
+	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
+	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
+	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
+
+	dhcpOptions	= append(dhcpOptions, dhcpLeaseTime)
+	dhcpOptions = append(dhcpOptions, dhcpServerIP)
+	dhcpOptions = append(dhcpOptions, endOptions)
+
+	return &dhcpOptions, true
 }
 
 func (s *Server) BuildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer *layers.DHCPv4) (*gopacket.SerializeBuffer, error) {
@@ -77,9 +112,7 @@ func (s *Server) BuildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer
 	return &buf, nil
 }
 
-func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
-	dhcpLayer, _ := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
-
+func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	clientMAC, err := extractMAC(dhcpLayer); if err != nil {
 		return err
 	}
@@ -94,10 +127,10 @@ func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
 	} else {
 		log.Println("Debug: Got requested IP from discover, checking availability...")
 		if database.IsIPAvailable(s.db, requestedIP.Data) {
-			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP.Data)
+			slog.Debug("Looks like its available, using it: %v\n", requestedIP.Data)
 			offeredIP = requestedIP.Data
 		} else {
-			log.Println("Debug: Generating IP because requested one is not available")
+			slog.Debug("Generating IP because requested one is not available")
 			oldIP := database.IsMACLeased(s.db, clientMAC)
 			if oldIP != nil {
 				offeredIP = oldIP
@@ -109,8 +142,6 @@ func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
 		}
 	}
 
-	log.Printf("Offered IP: %v\n", offeredIP.String())
-
 	offerLayer, err := s.ConstructOfferLayer(dhcpLayer, offeredIP); if err != nil {
 		return err
 	}
@@ -119,14 +150,14 @@ func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
 	}
 	packetBuf := *packetPtr
 
-	log.Println("Sending offer packet")
+	slog.Info("Offering Ip: %v to client mac: %v", offeredIP.String(), clientMAC.String())
 	s.sendch <- packetBuf.Bytes()
 
 	return nil 
 }
 
 func (s *Server) ConstructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
-	dhcpOptions, ok := s.ReadRequestList(discoverLayer)
+	dhcpOptions, ok := s.readRequestList(discoverLayer)
 	if !ok {
 		slog.Warn("Request list does not exist in Discover")
 	}
@@ -147,10 +178,7 @@ func (s *Server) ConstructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 	return dhcpLayer, nil
 }
 
-
-func (s *Server) createAck(packetSlice []byte, config c.Config) error {
-	dhcpLayer, _ := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
-
+func (s *Server) createAck(dhcpLayer *layers.DHCPv4) error {
 	clientMAC, err := extractMAC(dhcpLayer); if err != nil {
 		return err
 	}
@@ -164,7 +192,7 @@ func (s *Server) createAck(packetSlice []byte, config c.Config) error {
 		requestedIP = requestedIPOpt.Data
 		oldIP := database.IsMACLeased(s.db, clientMAC)
 		if slices.Compare(oldIP, requestedIP) == 0 {
-			log.Println("Mac is leased and it is leased to the requested IP, renewing...")
+			slog.Debug("Mac is leased and it is leased to the requested IP, renewing...")
 			// Renew the ip lease
 			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
 				return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
@@ -172,18 +200,17 @@ func (s *Server) createAck(packetSlice []byte, config c.Config) error {
 		}
 		log.Println("Debug: Got requested IP from request, checking availability...")
 		if database.IsIPAvailable(s.db, requestedIP) {
-			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP)
+			slog.Debug("Looks like its available, using it: %v\n", requestedIP)
 			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
 				return fmt.Errorf("Unable to create lease for requested IP: %w\n", err)
 			}
 		} else {
-			log.Println("Debug: Requested IP is not available, sending Nack")
-			err := s.createNack(); if err != nil {
+			slog.Debug("Requested IP is not available, sending Nack")
+			err := s.createNack(dhcpLayer); if err != nil {
 				return fmt.Errorf("Error sending nack in response to request")
 			}
 		}
 	}
-	log.Printf("Requested IP: %v\n", requestedIP.String())
 
 	ackLayer, err := s.ConstructAckLayer(dhcpLayer, requestedIP); if err != nil {
 		return err
@@ -193,14 +220,14 @@ func (s *Server) createAck(packetSlice []byte, config c.Config) error {
 	}
 	packetBuf := *packetPtr
 
-	log.Println("Sending ack packet")
+	slog.Info("Acking requested Ip: %v to client mac: %v", requestedIP.String(), clientMAC.String())
 	s.sendch <- packetBuf.Bytes()
 
 	return nil 
 }
 
 func (s *Server) ConstructAckLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
-	dhcpOptions, ok := s.ReadRequestList(requestLayer)
+	dhcpOptions, ok := s.readRequestList(requestLayer)
 	if !ok {
 		slog.Warn("Request list does not exist in Discover")
 	}
@@ -223,65 +250,79 @@ func (s *Server) ConstructAckLayer(requestLayer *layers.DHCPv4, offeredIP net.IP
 	return dhcpLayer, nil
 }
 
-func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
-	// Get RequestParams Option from layer.Options
-	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
+func (s *Server) createNack(dhcpLayer *layers.DHCPv4) error {
+	clientMAC, err := extractMAC(dhcpLayer); if err != nil {
+		return err
+	}
+
+	var requestedIP net.IP
+	requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	if !ok {
-		return nil, false
+		log.Println("Debug: Attempted to get requested IP from request, didn't find it, exiting")
+		return fmt.Errorf("Requested IP option not in request")
+	} else {
+		requestedIP = requestedIPOpt.Data
+		oldIP := database.IsMACLeased(s.db, clientMAC)
+		if slices.Compare(oldIP, requestedIP) == 0 {
+			slog.Debug("Mac is leased and it is leased to the requested IP, renewing...")
+			// Renew the ip lease
+			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
+				return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
+			}
+		}
+		log.Println("Debug: Got requested IP from request, checking availability...")
+		if database.IsIPAvailable(s.db, requestedIP) {
+			slog.Debug("Looks like its available, using it: %v\n", requestedIP)
+			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
+				return fmt.Errorf("Unable to create lease for requested IP: %w\n", err)
+			}
+		} else {
+			slog.Debug("Requested IP is not available, sending Nack")
+			err := s.createNack(dhcpLayer); if err != nil {
+				return fmt.Errorf("Error sending nack in response to request")
+			}
+		}
 	}
 
-	dhcpOptions := layers.DHCPOptions{}
-	
-	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeOffer)})
-	dhcpOptions = append(dhcpOptions, msgTypeOption)
-	// Iterate over Request List, get option requested 
-	for _, req := range requestList.Data {
-		if s.optionsMap[layers.DHCPOpt(req)] == nil {
-			continue
-		}
-		r := s.optionsMap[layers.DHCPOpt(req)].ToBytes()
-		if r == nil {
-			continue
-		}
-
-		op := layers.NewDHCPOption(layers.DHCPOpt(req), r) 
-		dhcpOptions = append(dhcpOptions, op)
+	ackLayer, err := s.ConstructNackLayer(dhcpLayer, requestedIP); if err != nil {
+		return err
 	}
+	packetPtr, err := s.BuildStdPacket(requestedIP, clientMAC, ackLayer); if err != nil {
+		return err
+	}
+	packetBuf := *packetPtr
 
-	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
-	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
-	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
+	slog.Info("Acking requested Ip: %v to client mac: %v", requestedIP.String(), clientMAC.String())
+	s.sendch <- packetBuf.Bytes()
 
-	dhcpOptions	= append(dhcpOptions, dhcpLeaseTime)
-	dhcpOptions = append(dhcpOptions, dhcpServerIP)
-	dhcpOptions = append(dhcpOptions, endOptions)
-
-	return &dhcpOptions, true
+	return nil 
 }
 
-// func addPaddingToDHCPOptions(options *layers.DHCPOptions) *layers.DHCPOptions {
-// 	// Determine current length of options
-// 	totalLength := 0
-// 	for _, opt := range *options {
-// 		totalLength += int(opt.Length) + 2 // Option type (1 byte) + length (1 byte) + data
-// 	}
+func (s *Server) ConstructNackLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
+	dhcpOptions, ok := s.readRequestList(requestLayer)
+	if !ok {
+		slog.Warn("Request list does not exist in Discover")
+	}
 
-// 	var oop layers.DHCPOptions 
-// 	// Check if total length is a multiple of 4 (32 bits)
-// 	if totalLength%4 != 0 {
-// 		paddingLength := 4 - (totalLength % 4)
-// 		padding := layers.DHCPOption{
-// 			Type:   0,  // Padding uses type 0x00 (RFC 2131 padding)
-// 			Length: uint8(paddingLength),
-// 			Data:   bytes.Repeat([]byte{0x00}, paddingLength),
-// 		}
-// 		oop = append(*options, padding)
-// 	}
+	// var flags uint16 = 0x8000
 
-// 	return &oop
-// }
+	dhcpLayer := &layers.DHCPv4{
+		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
+		HardwareType: layers.LinkTypeEthernet,
+		HardwareLen:  requestLayer.HardwareLen,
+		HardwareOpts: requestLayer.HardwareOpts, 
+		Xid:          requestLayer.Xid, // Need this from discover
+		Secs:         requestLayer.Secs, // Make this up for now
+		Flags:		  requestLayer.Flags,
+		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
+		ClientHWAddr: requestLayer.ClientHWAddr,
+		Options:     *dhcpOptions,
+	}
 
-// func (s *Server) ReadRequestListNack(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
+	return dhcpLayer, nil
+}
+
+// func (s *Server) readRequestListNack(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
 // 	// Get RequestParams Option from layer.Options
 // 	// requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
 // 	// if !ok {
@@ -325,7 +366,7 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 // 		log.Fatalf("Error while parsing DHCPv4 layer in packet")
 // 	} 
 
-// 	dhcpOptions, ok := s.ReadRequestListNack(lowPacket)
+// 	dhcpOptions, ok := s.readRequestListNack(lowPacket)
 // 	if !ok {
 // 		log.Println("Request list does not exist in Discover")
 // 	}
@@ -436,7 +477,7 @@ func (s *Server) ReadRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, boo
 // 	return data, nil
 // }
 
-// func (s *Server) ReadRequestListAck(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
+// func (s *Server) readRequestListAck(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
 // 	// Get RequestParams Option from layer.Options
 // 	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
 // 	if !ok {
