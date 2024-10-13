@@ -1,18 +1,16 @@
 package main
 
 import (
+	"os"
 	"net"
 	"fmt"
 	"log"
 	"log/slog"
-	//"encoding/binary"
-	"os"
 	"database/sql"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
-	// "github.com/spf13/viper"
 
 	c "gdhcp/config"
 	dhcpUtils "gdhcp/dhcp"
@@ -210,7 +208,7 @@ func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, c
 	case layers.DHCPMsgTypeRequest:
 		slog.Debug("Got Request")
 		err := s.processRequest(dhcpLayer); if err != nil {
-			fmt.Errorf("Error creating Ack: %w\n", err)
+			return fmt.Errorf("Error processing request: %w\n", err)
 		}
 	case layers.DHCPMsgTypeOffer:
 		log.Printf("Got Offer")

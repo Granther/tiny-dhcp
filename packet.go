@@ -178,7 +178,7 @@ func (s *Server) ConstructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 	return dhcpLayer, nil
 }
 
-func (s *Server) createAck(dhcpLayer *layers.DHCPv4) error {
+func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	clientMAC, err := extractMAC(dhcpLayer); if err != nil {
 		return err
 	}
@@ -209,6 +209,7 @@ func (s *Server) createAck(dhcpLayer *layers.DHCPv4) error {
 			err := s.createNack(dhcpLayer); if err != nil {
 				return fmt.Errorf("Error sending nack in response to request")
 			}
+			return nil
 		}
 	}
 
