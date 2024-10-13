@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"io"
 	"net"
 	"fmt"
 	"log"
@@ -41,13 +42,13 @@ type packetJob struct {
 func NewServer(config c.Config) (*Server, error) {
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
-		log.Fatalf("Failed to get interface: %v", err)
+		slog.Error(fmt.Sprintf("Failed to get interface: %v", err))
 		os.Exit(1)
 	}
 
 	serverIP, err := deviceUtils.GetUDPAddr(iface)
 	if err != nil {
-		log.Fatalf("Error occured while creating listen address struct, please review the interface configuration: %w\n", err)
+		slog.Error(fmt.Sprintf("Error occured while creating listen address struct, please review the interface configuration: %v\n", err))
 		os.Exit(1)
 	}
 	
@@ -92,7 +93,7 @@ func NewServer(config c.Config) (*Server, error) {
 }
 
 func (s *Server) Start() error {
-	log.Println("Starting server...")
+	slog.Info("Starting server...")
 
 	numWorkers := s.config.Server.NumWorkers
 	for i := 0; i < numWorkers; i++ {
@@ -102,7 +103,7 @@ func (s *Server) Start() error {
 	go s.receivePackets()
 	go s.sendPackets()
 
-	log.Println("Server is now listening for packets/quitch")
+	slog.Info("Server is now listening for packets/quitch")
 	// Wait for quit signal
 	<-s.quitch
 
@@ -121,7 +122,7 @@ func (s *Server) receivePackets() {
         buffer := make([]byte, 4096)
         n, clientAddr, err := s.conn.ReadFromUDP(buffer)
         if err != nil {
-            log.Printf("Error receiving packet: %v", err)
+            slog.Error(fmt.Sprintf("Error receiving packet: %v", err))
             continue
         }
         
@@ -130,7 +131,7 @@ func (s *Server) receivePackets() {
             // Packet added to queue
         default:
             // Queue is full, log and drop packet
-            log.Printf("Packet queue full, dropping packet from %v", clientAddr)
+            slog.Warn(fmt.Sprintf("Packet queue full, dropping packet from %v", clientAddr))
         }
     }
 }
@@ -140,7 +141,7 @@ func (s *Server) sendPackets() {
 	for packet := range s.sendch {
 		err := s.sendPacket(packet)
 		if err != nil {
-			log.Fatalf("Error occured while sending ready packet: %v", err)
+			slog.Debug(fmt.Sprintf("Error occured while sending ready packet: %v", err))
 		}
 	}
 }
@@ -149,7 +150,6 @@ func (s *Server) sendPacket(packet []byte) error {
 	if err := s.handle.WritePacketData(packet); err != nil {
 		return fmt.Errorf("Failed to send packet: %w", err)
 	}
-	fmt.Println("Send packet from sendPacket")
 	return nil
 }
 
@@ -161,7 +161,7 @@ func (s *Server) worker() {
 	}
 }
 
-func CreateLogger(logLevel string) {
+func CreateLogger(logLevel string, logsDir string) {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,
 		"info": slog.LevelInfo,
@@ -171,7 +171,13 @@ func CreateLogger(logLevel string) {
 		Level: levels[logLevel],
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
+	file, err := os.OpenFile(fmt.Sprintf("%v/logs.log", logsDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0777)
+    if err != nil {
+        log.Fatalf("Failed to open log file: %v", err)
+    }
+
+    multiWriter := io.MultiWriter(os.Stderr, file)
+	logger := slog.New(slog.NewTextHandler(multiWriter, handlerOpts))
 	slog.SetDefault(logger)
 }
 
@@ -182,11 +188,12 @@ func main() {
 		return
 	}
 
-	CreateLogger(config.Server.LogLevel)
+	CreateLogger(config.Server.LogLevel, config.Server.LogsDir)
+	slog.Info("Glorp log")
 
 	server, err := NewServer(config)
 	if err != nil {
-		log.Fatalf("Error occured while instantiating server: %v", err)
+		slog.Error(fmt.Sprintf("Error occured while instantiating server: %v", err))
 		return
 	}
 	server.Start()

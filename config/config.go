@@ -33,6 +33,7 @@ type Server struct {
 	ListenInterface string `json:"listenInterface"`
 	NumWorkers      int    `json:"numWorkers"`
 	LogLevel		string `json:"logLevel"`
+	LogsDir			string `json:"logsDir"`
 }
 
 type Config struct {
@@ -82,6 +83,7 @@ func GetDefaultConfig() *Config {
             ListenInterface: "any",
             NumWorkers: 10,
 			LogLevel: "debug",
+			LogsDir: "./logs",
         },
         DHCP: DHCP {
             SubnetMask: "255.255.255.0",

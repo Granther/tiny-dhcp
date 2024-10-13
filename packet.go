@@ -46,7 +46,7 @@ func (s *Server) createNack(dhcpLayer *layers.DHCPv4) error {
 		return err
 	}
 
-	nackLayer, err := s.constructNackLayer(dhcpLayer, offeredIP); if err != nil {
+	nackLayer, err := s.constructNackLayer(dhcpLayer); if err != nil {
 		return err
 	}
 

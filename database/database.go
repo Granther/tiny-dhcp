@@ -20,7 +20,6 @@ type Lease struct {
 }
 
 func CreateLeasesTable(db *sql.DB) (error) {
-
 	leasesTableSQL := `CREATE TABLE IF NOT EXISTS leases (
         "id" INTEGER PRIMARY KEY AUTOINCREMENT,
         "mac" TEXT UNIQUE,
