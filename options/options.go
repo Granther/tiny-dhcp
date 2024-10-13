@@ -81,14 +81,11 @@ func (c ClasslessStaticRoute) ToBytes() []byte {
 }
 
 
-func GetClasslessSR(config c.Config) DHCPOptionValue {
-    destCIDR := "10.10.1.0/24"
-    routerIP := "10.10.1.1"
-
+func GetClasslessSR(config c.Config) (DHCPOptionValue, error) {
     // Parse the CIDR to get the IP and subnet mask
-    _, ipNet, err := net.ParseCIDR(destCIDR)
+    _, ipNet, err := net.ParseCIDR(config.DHCP.NetworkAddr)
     if err != nil {
-        log.Fatalf("Error parsing CIDR: %v", err)
+        return nil, fmt.Errorf("Error parsing CIDR: %v", err)
     }
 
     // Determine the prefix length
@@ -106,7 +103,7 @@ func GetClasslessSR(config c.Config) DHCPOptionValue {
 func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 	return map[layers.DHCPOpt]DHCPOptionValue{
 		layers.DHCPOptSubnetMask: 		IPAddress(config.DHCP.SubnetMask),
-		// layers.DHCPOptBroadcastAddr: 	IPAddress(config.DHCP.BroadcastAddr),
+		layers.DHCPOptBroadcastAddr: 	IPAddress(config.DHCP.BroadcastAddr),
 
 		layers.DHCPOptRouter: 			IPAddressSlice(config.DHCP.Router),
 		layers.DHCPOptNameServer: 		IPAddressSlice(config.DHCP.NameServer),
@@ -119,13 +116,12 @@ func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 		layers.DHCPOptDefaultTTL: 		Int16(config.DHCP.DefaultTTL),
 		layers.DHCPOptTCPTTL: 			Int16(config.DHCP.TCPTTL),
 
-		// layers.DHCPOptHostname: 		String(config.DHCP.Hostname),
 		layers.DHCPOptDomainName: 		String(config.DHCP.DomainName),
-		// layers.DHCPOptDomainSearch:		String(config.DHCP.DomainName),
+		layers.DHCPOptDomainSearch:		String(config.DHCP.DomainName),
 
-		// layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
-		// layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
+		layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
+		layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
 
-		// layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
+		layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
 	}
 }

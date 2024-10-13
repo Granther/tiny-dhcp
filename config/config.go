@@ -10,6 +10,7 @@ import (
 )
 
 type DHCP struct {
+	NetworkAddr		string	 `json:"networkAddr"`
 	AddrPool		[]string `json:"addrPool"`
 	SubnetMask      string   `json:"subnetMask"`
 	Router          []string `json:"router"`
@@ -18,7 +19,6 @@ type DHCP struct {
 	DNSServer       []string `json:"dnsServer"`
 	LogServer       []string `json:"logServer"`
 	LeaseLen        int      `json:"leaseLen"`
-	Hostname        string   `json:"hostname"`
 	DomainName      string   `json:"domainName"`
 	IPForwarding    bool     `json:"ipForwarding"`
 	DatagramMTU     int      `json:"datagramMTU"`
@@ -34,7 +34,7 @@ type Server struct {
 	ListenInterface string `json:"listenInterface"`
 	NumWorkers      int    `json:"numWorkers"`
 	LogLevel		string `json:"logLevel"`
-	LogsDir			string `json:"logsDir"`
+	LogsPath		string `json:"logsPath"`
 }
 
 type Config struct {
@@ -84,9 +84,10 @@ func GetDefaultConfig() *Config {
             ListenInterface: "any",
             NumWorkers: 10,
 			LogLevel: "debug",
-			LogsDir: "./logs",
+			LogsPath: "./logs.log",
         },
         DHCP: DHCP {
+			NetworkAddr: "192.168.1.0/24"
 			AddrPool: []string{"192.168.1.20", "192.168.1.240"},
             SubnetMask: "255.255.255.0",
             Router: []string{"192.168.1.1"},
@@ -95,7 +96,6 @@ func GetDefaultConfig() *Config {
 			DNSServer:		[]string{},
 			LogServer:		[]string{},
 			LeaseLen:		30000,
-			Hostname:		"gdhcp",
 			DomainName:		"local",
 			IPForwarding:	true,
 			DatagramMTU:	1500,

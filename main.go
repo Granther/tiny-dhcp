@@ -163,7 +163,7 @@ func (s *Server) worker() {
 	}
 }
 
-func CreateLogger(logLevel string, logsDir string) {
+func CreateLogger(logLevel string, logsPath string) {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,
 		"info": slog.LevelInfo,
@@ -173,7 +173,7 @@ func CreateLogger(logLevel string, logsDir string) {
 		Level: levels[logLevel],
 	}
 
-	file, err := os.OpenFile(fmt.Sprintf("%v/logs.log", logsDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0777)
+	file, err := os.OpenFile(logsPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
     if err != nil {
         log.Fatalf("Failed to open log file: %v", err)
     }
@@ -190,7 +190,7 @@ func main() {
 		return
 	}
 
-	CreateLogger(config.Server.LogLevel, config.Server.LogsDir)
+	CreateLogger(config.Server.LogLevel, config.Server.LogsPath)
 
 	server, err := NewServer(config)
 	if err != nil {
@@ -211,17 +211,20 @@ func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, c
 	case layers.DHCPMsgTypeDiscover:
 		slog.Debug("Got Discover")
 		err := s.createOffer(dhcpLayer); if err != nil {
-			return fmt.Errorf("Error creating offer: %w\n", err)
+			return fmt.Errorf("Error creating offer: %v", err)
 		}
 	case layers.DHCPMsgTypeRequest:
 		slog.Debug("Got Request")
 		err := s.processRequest(dhcpLayer); if err != nil {
-			return fmt.Errorf("Error processing request: %w\n", err)
+			return fmt.Errorf("Error processing request: %v", err)
 		}
 	case layers.DHCPMsgTypeOffer:
-		log.Printf("Got Offer")
+		slog.Debug("Got Offer")
 	case layers.DHCPMsgTypeDecline:
-		log.Printf("Got Decline")
+		slog.Debug("Got Decline")
+		err := s.processDecline(dhcpLayer); if err != nil {
+			return fmt.Errorf("Error processing decline: %v", err)
+		}
 	case layers.DHCPMsgTypeAck:
 		log.Printf("Got Ack")
 	case layers.DHCPMsgTypeNak:
@@ -236,10 +239,3 @@ func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, c
 
 	return nil
 }
-
-// If nil, essentially drop the packet
-// if dhcp_packet == nil || dhcp_layer == nil{
-// 	log.Printf("Error, unable to get DHCP packet or layer")
-// 	return
-// }
-// dhcp, _ := dhcp_layer.(*layers.DHCPv4)

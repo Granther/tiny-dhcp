@@ -4,9 +4,10 @@
         "listenInterface": "wlp2s0",
         "numWorkers": 10,
         "logLevel": "debug",
-        "logDir": "./logs"
+        "logsPath": "./logs.log"
     },
     "dhcp": {
+        "networkAddr": "192.168.1.0/24",
         "addrPool": ["192.168.1.20", "192.168.1.240"],
         "subnetMask": "255.255.255.0",
         "router": [
@@ -17,7 +18,6 @@
         "dnsServer": ["192.168.1.1", "8.8.8.8", "1.1.1.1"],
         "logServer": [],
         "leaseLen": 86400,
-        "hostname": "",
         "domainName": "local",
         "ipForwarding": true,
         "datagramMTU": 1500,
