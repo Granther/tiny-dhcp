@@ -1,19 +1,19 @@
 {
     "server": {
         "port": 67,
-        "listenInterface": "enp0s3",
+        "listenInterface": "wlp2s0",
         "numWorkers": 10,
         "logLevel": "debug"
     },
     "dhcp": {
-        "addrPool": ["10.10.1.20", "10.10.1.240"],
+        "addrPool": ["192.168.1.20", "192.168.1.240"],
         "subnetMask": "255.255.255.0",
         "router": [
-            "10.10.1.1"
+            "192.168.1.1"
         ],
         "timeServer": [],
         "nameServer": [],
-        "dnsServer": ["10.10.1.1", "8.8.8.8", "1.1.1.1"],
+        "dnsServer": ["192.168.1.1", "8.8.8.8", "1.1.1.1"],
         "logServer": [],
         "leaseLen": 86400,
         "hostname": "",

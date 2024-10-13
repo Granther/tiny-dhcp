@@ -41,6 +41,46 @@ func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
 	return mac, nil
 }
 
+func (s *Server) createNack(dhcpLayer *layers.DHCPv4) error {
+	buf := gopacket.NewSerializeBuffer()
+	var layersToSerialize []gopacket.SerializableLayer
+
+	ethernetLayer := &layers.Ethernet{
+		SrcMAC: s.serverMAC,
+		DstMAC: dhcpLayer.ClientHWAddr, 
+		EthernetType: layers.EthernetTypeIPv4,
+	}
+	layersToSerialize = append(layersToSerialize, ethernetLayer)
+
+	ipLayer := &layers.IPv4{
+		Version: 4,
+		TTL: 64,
+		SrcIP: s.serverIP,
+		DstIP: net.IP{255, 255, 255, 255},
+		Protocol: layers.IPProtocolUDP,
+	}
+	layersToSerialize = append(layersToSerialize, ipLayer)
+
+	udpLayer := &layers.UDP{
+		SrcPort: layers.UDPPort(67),
+		DstPort: layers.UDPPort(68),
+	}
+	udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
+	layersToSerialize = append(layersToSerialize, udpLayer)
+
+	dhcpLayerConst, _ := s.ConstructNackLayer(dhcpLayer) // Returns pointer to what was affected
+	layersToSerialize = append(layersToSerialize, dhcpLayerConst)
+
+	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}, layersToSerialize...); err != nil {
+		return fmt.Errorf("error serializing packet: %w", err)
+	}
+
+	log.Println("Sending nack packet")
+	s.sendch <- buf.Bytes()
+
+	return nil 
+}
+
 func (s *Server) readRequestList(layer *layers.DHCPv4) (*layers.DHCPOptions, bool) {
 	// Get RequestParams Option from layer.Options
 	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
@@ -246,6 +286,29 @@ func (s *Server) ConstructAckLayer(requestLayer *layers.DHCPv4, offeredIP net.IP
 		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
 		ClientHWAddr: requestLayer.ClientHWAddr,
 		Options:     *dhcpOptions,
+	}
+
+	return dhcpLayer, nil
+}
+
+func (s *Server) ConstructNackLayer(requestDhcpLayer *layers.DHCPv4) (*layers.DHCPv4, error) {
+	dhcpOptions := layers.DHCPOptions{}
+	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(layers.DHCPMsgTypeNak)})
+	dhcpOptions = append(dhcpOptions, msgTypeOption)
+
+	var flags uint16 = 0x8000
+
+	dhcpLayer := &layers.DHCPv4{
+		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
+		HardwareType: layers.LinkTypeEthernet,
+		HardwareLen:  requestDhcpLayer.HardwareLen,
+		HardwareOpts: requestDhcpLayer.HardwareOpts, 
+		Flags:		  flags,
+		Xid:          requestDhcpLayer.Xid, 
+		Secs:         requestDhcpLayer.Secs, 
+		YourClientIP: net.IP{0, 0, 0, 0},
+		ClientHWAddr: requestDhcpLayer.ClientHWAddr,
+		Options:     dhcpOptions,
 	}
 
 	return dhcpLayer, nil
