@@ -10,7 +10,6 @@ import (
 	"slices"
 
     _ "github.com/mattn/go-sqlite3"
-	"github.com/mdlayher/arp"
 	c "gdhcp/config"
 )
 
@@ -28,7 +27,7 @@ func CreateLeasesTable(db *sql.DB) (error) {
         "id" INTEGER PRIMARY KEY AUTOINCREMENT,
         "mac" TEXT UNIQUE NOT NULL,
         "ip" TEXT UNIQUE NOT NULL,
-		"static" BOOLEAN NOT NULL DEFAULT 0
+		"static" BOOLEAN NOT NULL DEFAULT 0,
 		"lease_len" INTEGER,
 		"leased_on" TEXT
     );`
@@ -169,7 +168,9 @@ func GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 
 	for ip := startIP; !IsIPEqual(ip, endIP); ip = IncrementIP(ip) {
 		if !IPsContains(ips, ip) {
-			return ip, nil 
+			if !IsOccupiedStatic(ip) {
+				return ip, nil 
+			}
 		}
 	}
 
@@ -177,7 +178,6 @@ func GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 }
 
 func IsOccupiedStatic(ip net.IP) bool {
-
 	req := netlink.NewArpRequest(
 		netlink.ARPReq{
 			Op: netlink.ArpOpRequest,
@@ -190,12 +190,12 @@ func IsOccupiedStatic(ip net.IP) bool {
 
 	err := netlink.SendArpRequest(req)
 	if err != nil {
-		fmt.Println("Error sending ARP request:", err)
-		os.Exit(1)
+		slog.Error("Error sending ARP request", "error", err)
+		return true
 	}
 
 	fmt.Println("ARP request sent to:", targetIP.String())
-	}
+
 	return false
 }
 
