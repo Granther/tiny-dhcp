@@ -226,8 +226,9 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	var requestedIP net.IP
 	requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	if !ok {
-		log.Println("Debug: Attempted to get requested IP from request, didn't find it")
-		return fmt.Errorf("Requested IP option not in request")
+		slog.Info("Attempted to get requested IP from request, didn't find it, skipping")
+		requestedIP = dhcpLayer.ClientIP
+		slog.Debug(fmt.Sprintf("%v", requestedIP.String()))
 	} else {
 		requestedIP = requestedIPOpt.Data
 		oldIP := database.IsMACLeased(s.db, clientMAC)

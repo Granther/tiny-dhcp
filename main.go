@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	// "io"
+	"io"
 	"net"
 	"fmt"
 	"log"
@@ -173,13 +173,13 @@ func CreateLogger(logLevel string, logsDir string) {
 		Level: levels[logLevel],
 	}
 
-	// file, err := os.OpenFile(fmt.Sprintf("%v/logs.log", logsDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0777)
-    // if err != nil {
-    //     log.Fatalf("Failed to open log file: %v", err)
-    // }
+	file, err := os.OpenFile(fmt.Sprintf("%v/logs.log", logsDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0777)
+    if err != nil {
+        log.Fatalf("Failed to open log file: %v", err)
+    }
 
-    // multiWriter := io.MultiWriter(os.Stderr, file)
-	logger := slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
+    multiWriter := io.MultiWriter(os.Stderr, file)
+	logger := slog.New(slog.NewTextHandler(multiWriter, handlerOpts))
 	slog.SetDefault(logger)
 }
 
