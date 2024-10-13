@@ -28,16 +28,24 @@ func processMAC(mac net.HardwareAddr) (net.HardwareAddr, bool, error) {
 	}
 }
 
-func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
-	dhcpLayer, _ := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
-
-	clientMAC, cok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptClientID)
-	if !cok {
-		log.Println("Couldnt get client MAC from options")
+func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
+	clientMAC, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptClientID)
+	if !ok {
+		return nil, fmt.Errorf("Unable to get client mac from dhcp layer")
 	}
 
 	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data)); if err != nil {
-		return fmt.Errorf("Error processing mac to usable form: %v", err)
+		return nil, fmt.Errorf("Error processing mac to usable form: %v", err)
+	}
+
+	return mac, nil
+}
+
+func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
+	dhcpLayer, _ := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
+
+	clientMAC, err := extractMAC(dhcpLayer); if err != nil {
+		return err
 	}
 
 	var offeredIP net.IP
@@ -54,7 +62,7 @@ func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
 			offeredIP = requestedIP.Data
 		} else {
 			log.Println("Debug: Generating IP because requested one is not available")
-			oldIP := database.IsMACLeased(s.db, mac)
+			oldIP := database.IsMACLeased(s.db, clientMAC)
 			if oldIP != nil {
 				offeredIP = oldIP
 			} else {
@@ -67,44 +75,10 @@ func (s *Server) createOffer(packetSlice []byte, config c.Config) error {
 
 	log.Printf("Offered IP: %v\n", offeredIP.String())
 
-	// buf := gopacket.NewSerializeBuffer()
-	// var layersToSerialize []gopacket.SerializableLayer
-
-	// ethernetLayer := &layers.Ethernet{
-	// 	SrcMAC: s.serverMAC,
-	// 	DstMAC: mac, 
-	// 	EthernetType: layers.EthernetTypeIPv4,
-	// }
-	// layersToSerialize = append(layersToSerialize, ethernetLayer)
-
-	// ipLayer := &layers.IPv4{
-	// 	Version: 4,
-	// 	TTL: 64,
-	// 	SrcIP: s.serverIP, // We always respond on the DHCP ip
-	// 	DstIP: offeredIP, // We set the Dest to that of the offered IP
-	// 	Protocol: layers.IPProtocolUDP,
-	// }
-	// layersToSerialize = append(layersToSerialize, ipLayer)
-
-	// udpLayer := &layers.UDP{
-	// 	SrcPort: layers.UDPPort(67),
-	// 	DstPort: layers.UDPPort(68),
-	// }
-	// udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
-	// layersToSerialize = append(layersToSerialize, udpLayer)
-
-	// dhcpLayer, _ := s.ConstructOfferLayer(packet_slice, offeredIP) // Returns pointer to what was affected
-	// layersToSerialize = append(layersToSerialize, dhcpLayer)
-
-	// // Serialize the packet layers into the buffer
-	// if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}, layersToSerialize...); err != nil {
-	// 	return fmt.Errorf("error serializing packet: %w", err)
-	// }
-
-	offerLayer, err := s.ConstructOfferLayer(packetSlice, offeredIP); if err != nil {
+	offerLayer, err := s.ConstructOfferLayer(dhcpLayer, offeredIP); if err != nil {
 		return err
 	}
-	packetPtr, err := s.BuildStdPacket(offeredIP, mac, offerLayer); if err != nil {
+	packetPtr, err := s.BuildStdPacket(offeredIP, clientMAC, offerLayer); if err != nil {
 		return err
 	}
 	packetBuf := *packetPtr
@@ -150,19 +124,11 @@ func (s *Server) BuildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer
 	return &buf, nil
 }
 
-func (s *Server) createAck(packet_slice []byte, config c.Config) error {
-	dhcpLayer, _ := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
+func (s *Server) createAck(packetSlice []byte, config c.Config) error {
+	dhcpLayer, _ := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
 
-	buf := gopacket.NewSerializeBuffer()
-	var layersToSerialize []gopacket.SerializableLayer
-
-	clientMAC, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptClientID)
-	if !ok {
-		log.Println("Couldnt get client MAC from options")
-	}
-
-	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data)); if err != nil {
-		return fmt.Errorf("Error processing mac to usable form: %v", err)
+	clientMAC, err := extractMAC(dhcpLayer); if err != nil {
+		return err
 	}
 
 	var requestedIP net.IP
@@ -172,81 +138,49 @@ func (s *Server) createAck(packet_slice []byte, config c.Config) error {
 		return fmt.Errorf("Requested IP option not in request")
 	} else {
 		requestedIP = requestedIPOpt.Data
-		oldIP := database.IsMACLeased(s.db, mac)
+		oldIP := database.IsMACLeased(s.db, clientMAC)
 		if slices.Compare(oldIP, requestedIP) == 0 {
 			log.Println("Mac is leased and it is leased to the requested IP, renewing...")
 			// Renew the ip lease
-			err := database.LeaseIP(s.db, requestedIP, mac, s.config.DHCP.LeaseLen); if err != nil {
+			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
 				return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
 			}
 		}
 		log.Println("Debug: Got requested IP from request, checking availability...")
 		if database.IsIPAvailable(s.db, requestedIP) {
 			log.Printf("Debug: Looks like its available, using it: %v\n", requestedIP)
-			err := database.LeaseIP(s.db, requestedIP, mac, s.config.DHCP.LeaseLen); if err != nil {
+			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
 				return fmt.Errorf("Unable to create lease for requested IP: %w\n", err)
 			}
 		} else {
 			log.Println("Debug: Requested IP is not available, sending Nack")
-			// err := s.createNack(); if err != nil {
-			// 	return fmt.Errorf("Error sending nack in response to request")
-			// }
+			err := s.createNack(); if err != nil {
+				return fmt.Errorf("Error sending nack in response to request")
+			}
 		}
 	}
 
-	ethernetLayer := &layers.Ethernet{
-		SrcMAC: s.serverMAC,
-		DstMAC: mac, 
-		EthernetType: layers.EthernetTypeIPv4,
-	}
-	layersToSerialize = append(layersToSerialize, ethernetLayer)
-
 	log.Printf("Requested IP: %v\n", requestedIP.String())
 
-	ipLayer := &layers.IPv4{
-		Version: 4,
-		TTL: 64,
-		SrcIP: s.serverIP, // We always respond on the DHCP ip
-		DstIP: requestedIP, // We set the Dest to that of the offered IP
-		Protocol: layers.IPProtocolUDP,
+	ackLayer, err := s.ConstructAckLayer(dhcpLayer, requestedIP); if err != nil {
+		return err
 	}
-	layersToSerialize = append(layersToSerialize, ipLayer)
-
-	udpLayer := &layers.UDP{
-		SrcPort: layers.UDPPort(67),
-		DstPort: layers.UDPPort(68),
+	packetPtr, err := s.BuildStdPacket(requestedIP, clientMAC, ackLayer); if err != nil {
+		return err
 	}
-	udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
-	layersToSerialize = append(layersToSerialize, udpLayer)
-
-	dhcpLayerConst, _ := s.ConstructAckLayer(packet_slice, requestedIP) // Returns pointer to what was affected
-	layersToSerialize = append(layersToSerialize, dhcpLayerConst)
-
-	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}, layersToSerialize...); err != nil {
-		return fmt.Errorf("error serializing packet: %w", err)
-	}
+	packetBuf := *packetPtr
 
 	log.Println("Sending ack packet")
-	s.sendch <- buf.Bytes()
+	s.sendch <- packetBuf.Bytes()
 
 	return nil 
 }
 
-func (s *Server) ConstructOfferLayer(packet_slice []byte, offeredIP net.IP) (*layers.DHCPv4, error) {
-	DHCPPacket := gopacket.NewPacket(packet_slice, layers.LayerTypeDHCPv4, gopacket.Default)
-	discDhcpLayer := DHCPPacket.Layer(layers.LayerTypeDHCPv4)
-
-	lowPacket, ok := discDhcpLayer.(*layers.DHCPv4)
+func (s *Server) ConstructOfferLayer(dhcpLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
+	dhcpOptions, ok := s.ReadRequestList(dhcpLayer)
 	if !ok {
-		log.Fatalf("Error while parsing DHCPv4 layer in packet")
-	} 
-
-	dhcpOptions, ok := s.ReadRequestList(lowPacket)
-	if !ok {
-		log.Println("Request list does not exist in Discover")
+		slog.Warm("Request list does not exist in Discover")
 	}
-
-	// dhcpOptions = addPaddingToDHCPOptions(dhcpOptions)
 
 	var hardwareLen uint8 = 6 // MAC is commonly 6
 	var hardwareOpts uint8 = 0 // None I guess, maybe specify unicast or something
@@ -567,3 +501,37 @@ func (s *Server) ConstructAckLayer(packet_slice []byte, offeredIP net.IP) (*laye
 // 	// We return a pointer so we can append other things later, such as opt 255
 // 	return &dhcpOptions, true
 // }
+
+	// buf := gopacket.NewSerializeBuffer()
+	// var layersToSerialize []gopacket.SerializableLayer
+
+	// ethernetLayer := &layers.Ethernet{
+	// 	SrcMAC: s.serverMAC,
+	// 	DstMAC: mac, 
+	// 	EthernetType: layers.EthernetTypeIPv4,
+	// }
+	// layersToSerialize = append(layersToSerialize, ethernetLayer)
+
+	// ipLayer := &layers.IPv4{
+	// 	Version: 4,
+	// 	TTL: 64,
+	// 	SrcIP: s.serverIP, // We always respond on the DHCP ip
+	// 	DstIP: offeredIP, // We set the Dest to that of the offered IP
+	// 	Protocol: layers.IPProtocolUDP,
+	// }
+	// layersToSerialize = append(layersToSerialize, ipLayer)
+
+	// udpLayer := &layers.UDP{
+	// 	SrcPort: layers.UDPPort(67),
+	// 	DstPort: layers.UDPPort(68),
+	// }
+	// udpLayer.SetNetworkLayerForChecksum(ipLayer) // Important for checksum calculation
+	// layersToSerialize = append(layersToSerialize, udpLayer)
+
+	// dhcpLayer, _ := s.ConstructOfferLayer(packet_slice, offeredIP) // Returns pointer to what was affected
+	// layersToSerialize = append(layersToSerialize, dhcpLayer)
+
+	// // Serialize the packet layers into the buffer
+	// if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}, layersToSerialize...); err != nil {
+	// 	return fmt.Errorf("error serializing packet: %w", err)
+	// }
