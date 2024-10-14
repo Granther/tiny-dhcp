@@ -10,7 +10,6 @@ import (
 	"slices"
 
     _ "github.com/mattn/go-sqlite3"
-	c "gdhcp/config"
 )
 
 type Lease struct {
@@ -140,12 +139,12 @@ func UnleaseIP(db *sql.DB, ip net.IP) (error) {
 	return nil
 }
 
-func GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
+func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
     query := "SELECT id, ip FROM leases"
 
     rows, err := db.Query(query)
     if err != nil {
-        return nil, fmt.Errorf("%w\n", err)
+        return nil, fmt.Errorf("%v\n", err)
     }
     defer rows.Close()
 
@@ -157,29 +156,14 @@ func GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 			if err == sql.ErrNoRows {
 				break
 			}
-            return nil, fmt.Errorf("%w\n", err)
+            return nil, fmt.Errorf("%v\n", err)
         }
 
         ips = append(ips, net.ParseIP(lease.IP))
     }
 
-	startIP := net.ParseIP(config.DHCP.AddrPool[0])
-	endIP := net.ParseIP(config.DHCP.AddrPool[1])
-	serverStruct := server.GetServer()
-
-	for ip := startIP; !IsIPEqual(ip, endIP); ip = IncrementIP(ip) {
-		if !IPsContains(ips, ip) {
-			go IsOccupiedStatic(serverStruct.serverMAC, serverStruct.serverIP, ip)
-			select {
-				case ipch<-
-			}
-
-		}
-	}
-	// return ip, nil 
-
-	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
-}																																																														
+	return ips, nil
+}
 
 func IPsContains(ips []net.IP, ip net.IP) bool {
 	for _, item := range ips {

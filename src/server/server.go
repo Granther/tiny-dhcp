@@ -32,6 +32,7 @@ type Server struct {
 	db			*sql.DB
 	workerPool	chan struct{}
 	packetch 	chan packetJob
+	ipch		chan net.IP
 	sendch		chan []byte
 	quitch		chan struct{}
 }
@@ -89,6 +90,7 @@ func NewServer(config c.Config) (*Server, error) {
 		db:			db,
 		workerPool:	make(chan struct{}, numWorkers),
 		packetch:	make(chan packetJob, 1000), // Can hold 1000 packets
+		ipch:		make(chan net.IP),
 		sendch:		make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
 		quitch:		make(chan struct{}),
 	}, nil
@@ -106,7 +108,8 @@ func (s *Server) Start() error {
 	go s.sendPackets()
 
 	slog.Info("Server is now listening for packets/quitch")
-	// Wait for quit signal
+
+	// Wait for quit signal is recieved on this channel
 	<-s.quitch
 
 	// Close connection and channels
@@ -211,6 +214,7 @@ func (s *Server) worker() {
         err := s.handleDHCPPacket(job.data, job.clientAddr, s.config); if err != nil {
 			slog.Error(fmt.Sprintf("Error occured while handline dhcp packet: %v", err))
 		}
+		// Reads one item off the worker queue 
         <-s.workerPool 
 	}
 }
@@ -254,3 +258,28 @@ func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, c
 
 	return nil
 }
+
+func (s *Server) GenerateIP(db *sql.DB,  config *c.Config) (net.IP, error) {
+	ips, err := database.GetLeasedIPs(db); if err != nil {
+		return nil, fmt.Errorf("Error getting leases from database: %v\n", err)
+	}
+
+	startIP := net.ParseIP(config.DHCP.AddrPool[0])
+	endIP := net.ParseIP(config.DHCP.AddrPool[1])
+
+	for ip := startIP; !database.IsIPEqual(ip, endIP); ip = database.IncrementIP(ip) {
+		if !database.IPsContains(ips, ip) {
+			go s.IsOccupiedStatic(ip)
+			select {
+			case newIP := <-s.ipch:
+				slog.Debug("Got ip: %v", newIP.String())
+				return newIP, nil
+			default:
+				continue
+			}
+		}
+	}
+	// return ip, nil 
+
+	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
+}	

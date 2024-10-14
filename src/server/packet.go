@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -163,7 +164,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	if !ok {
 		log.Println("Attempted to get requested IP from discover, didn't find it, generating addr")
-		offeredIP, err = database.GenerateIP(s.db, &s.config); if err != nil {
+		offeredIP, err = s.GenerateIP(s.db, &s.config); if err != nil {
 			return fmt.Errorf("%w", err)
 		}
 	} else {
@@ -177,7 +178,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 			if oldIP != nil {
 				offeredIP = oldIP
 			} else {
-				offeredIP, err = database.GenerateIP(s.db, &s.config); if err != nil {
+				offeredIP, err = s.GenerateIP(s.db, &s.config); if err != nil {
 					return fmt.Errorf("%v", err)
 				}
 			}
@@ -330,7 +331,7 @@ func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net
 	return dhcpLayer, nil
 }
 
-func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP ip net.IP) {
+func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) {
 	ethLayer := &layers.Ethernet{
 		SrcMAC:       srcMAC,
 		DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
@@ -354,27 +355,41 @@ func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP ip net.IP)
 	opts := gopacket.SerializeOptions{}
 	gopacket.SerializeLayers(buf, opts, ethLayer, arpLayer)
 
-	slog.Info(fmt.Sprintf("Sending arp request to IP: %v", dstIP.String())
+	slog.Info(fmt.Sprintf("Sending arp request to IP: %v", dstIP.String()))
 	s.sendch <- buf.Bytes()
 
 	return
 }
 
 func (s *Server) IsOccupiedStatic(targetIP net.IP) {
-	arpRequest := s.sendARPRequest(s.serverMAC, s.serverIP, targetIP)
+	done := make(chan bool)
+	s.sendARPRequest(s.serverMAC, s.serverIP, targetIP)
 
-	packetSource := gopacket.NewPacketSource(s.handle, s.handle.LinkType())
-	for packet := range packetSource.Packets() {
-		arpLayer := packet.Layer(layers.LayerTypeARP)
-		if arpLayer != nil {
-			if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
-				slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
-				break
+	go func() {
+		packetSource := gopacket.NewPacketSource(s.handle, s.handle.LinkType())
+		for packet := range packetSource.Packets() {
+			select {
+			case <-done:
+				slog.Debug("Done channel signal sent, stopping waiting for arp..")
+				return
+			default:
+				arpLayer := packet.Layer(layers.LayerTypeARP)
+				if arpLayer != nil {
+					if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
+						slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
+						return
+					}
+				}
 			}
 		}
 	}
 
-	return
+	time.Sleep(time.Second)
+	slog.Debug("Second is up, closing...")
+
+	close(done)
+
+	s.ipch <- targetIP
 }
 
 // Where we left off
@@ -385,3 +400,5 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) {
 // This channel represents the first IP a goroutine finfs is completely available
 // Should I really do a worker pool?
 // Maybe I make the buffer half the size of the worker pool so I dont hog all workers
+
+// HYPE HYPE HYPE DONT BE LAZY
