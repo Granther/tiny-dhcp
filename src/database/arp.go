@@ -10,26 +10,7 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-func IsOccupiedStatic() {
 
-	arpRequest := s.sendARPRequest(iface.HardwareAddr, localIP, targetIP)
-
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSource.Packets() {
-		arpLayer := packet.Layer(layers.LayerTypeARP)
-		if arpLayer != nil {
-			arp, ok := arpLayer.(*layers.ARP); if !ok {
-				fmt.Println("Did not do arp layer")
-			}
-			if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
-				fmt.Printf("Received ARP reply from %v: MAC %v\n", targetIP, net.HardwareAddr(arp.SourceHwAddress))
-				break
-			}
-		}
-	}
-
-	return
-}
 
 // Client needs addr generated
 // 

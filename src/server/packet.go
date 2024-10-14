@@ -359,3 +359,20 @@ func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP ip net.IP)
 
 	return
 }
+
+func (s *Server) IsOccupiedStatic(targetIP net.IP) {
+	arpRequest := s.sendARPRequest(s.serverMAC, s.serverIP, targetIP)
+
+	packetSource := gopacket.NewPacketSource(s.handle, s.handle.LinkType())
+	for packet := range packetSource.Packets() {
+		arpLayer := packet.Layer(layers.LayerTypeARP)
+		if arpLayer != nil {
+			if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
+				fmt.Printf("Received ARP reply from %v: MAC %v\n", targetIP, net.HardwareAddr(arp.SourceHwAddress))
+				break
+			}
+		}
+	}
+
+	return
+}
