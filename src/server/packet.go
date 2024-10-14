@@ -329,3 +329,33 @@ func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net
 
 	return dhcpLayer, nil
 }
+
+func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP ip net.IP) {
+	ethLayer := &layers.Ethernet{
+		SrcMAC:       srcMAC,
+		DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		EthernetType: layers.EthernetTypeARP,
+	}
+
+	arpLayer := &layers.ARP{
+		AddrType:		   layers.LinkTypeEthernet,
+		Protocol:		   layers.EthernetTypeIPv4,
+		Operation:         layers.ARPRequest,
+		SourceHwAddress:   srcMAC,
+		SourceProtAddress: srcIP.To4(),
+		DstHwAddress:      []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // Unknown 
+		DstProtAddress:    dstIP.To4(),
+		HwAddressSize:     6,
+		ProtAddressSize:   4,
+	}
+
+	// Serialize the layers into a byte buffer
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{}
+	gopacket.SerializeLayers(buf, opts, ethLayer, arpLayer)
+
+	slog.Info(fmt.Sprintf("Sending arp request to IP: %v", dstIP.String())
+	s.sendch <- buf.Bytes()
+
+	return
+}

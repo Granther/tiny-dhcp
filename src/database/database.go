@@ -165,14 +165,18 @@ func GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 
 	startIP := net.ParseIP(config.DHCP.AddrPool[0])
 	endIP := net.ParseIP(config.DHCP.AddrPool[1])
+	serverStruct := server.GetServer()
 
 	for ip := startIP; !IsIPEqual(ip, endIP); ip = IncrementIP(ip) {
 		if !IPsContains(ips, ip) {
-			// if !IsOccupiedStatic(ip) {
-			return ip, nil 
-			// }
+			go IsOccupiedStatic(serverStruct.serverMAC, serverStruct.serverIP, ip)
+			select {
+				case ipch<-
+			}
+
 		}
 	}
+	// return ip, nil 
 
 	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
 }																																																														

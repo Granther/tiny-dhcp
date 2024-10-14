@@ -149,24 +149,43 @@ func (s *Server) receivePackets() {
 		}
 	}()
 
-	go func() {
-		for {
-			buffer := make([]byte, 4096)
-			n, clientAddr, err := s.conn.ReadFromUDP(buffer)
-			if err != nil {
-				slog.Error(fmt.Sprintf("Error receiving packet: %v", err))
-				continue
-			}
+	// arpRequest, err := s.sendARPRequest(iface.HardwareAddr, localIP, targetIP)
+	// if err := nil {
+	// 	return nil
+	// }
+
+	// packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	// for packet := range packetSource.Packets() {
+	// 	arpLayer := packet.Layer(layers.LayerTypeARP)
+	// 	if arpLayer != nil {
+	// 		arp, ok := arpLayer.(*layers.ARP); if !ok {
+	// 			fmt.Println("Did not do arp layer")
+	// 		}
+	// 		if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
+	// 			fmt.Printf("Received ARP reply from %v: MAC %v\n", targetIP, net.HardwareAddr(arp.SourceHwAddress))
+	// 			break
+	// 		}
+	// 	}
+	// }
+	
+	// go func() {
+	// 	for {
+	// 		buffer := make([]byte, 4096)
+	// 		n, clientAddr, err := s.conn.ReadFromUDP(buffer)
+	// 		if err != nil {
+	// 			slog.Error(fmt.Sprintf("Error receiving packet: %v", err))
+	// 			continue
+	// 		}
 			
-			select {
-			case s.packetch <- packetJob{data: buffer[:n], clientAddr: clientAddr}:
-				// Packet added to queue
-			default:
-				// Queue is full, log and drop packet
-				slog.Warn(fmt.Sprintf("Packet queue full, dropping packet from %v", clientAddr))
-			}
-		}
-	}()
+	// 		select {
+	// 		case s.packetch <- packetJob{data: buffer[:n], clientAddr: clientAddr}:
+	// 			// Packet added to queue
+	// 		default:
+	// 			// Queue is full, log and drop packet
+	// 			slog.Warn(fmt.Sprintf("Packet queue full, dropping packet from %v", clientAddr))
+	// 		}
+	// 	}
+	// }()
 }
 
 func (s *Server) sendPackets() {
