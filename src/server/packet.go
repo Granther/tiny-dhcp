@@ -368,7 +368,7 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) {
 		arpLayer := packet.Layer(layers.LayerTypeARP)
 		if arpLayer != nil {
 			if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
-				fmt.Printf("Received ARP reply from %v: MAC %v\n", targetIP, net.HardwareAddr(arp.SourceHwAddress))
+				slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
 				break
 			}
 		}
@@ -376,3 +376,12 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) {
 
 	return
 }
+
+// Where we left off
+// Upon wanting ip
+// Search through all a vailable IPs to check if they have static clients
+// When checking. open new gorout
+// Have one channel that will end all children when set
+// This channel represents the first IP a goroutine finfs is completely available
+// Should I really do a worker pool?
+// Maybe I make the buffer half the size of the worker pool so I dont hog all workers
