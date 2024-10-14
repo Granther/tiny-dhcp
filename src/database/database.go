@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"time"
-	// "slices"
 
     _ "github.com/mattn/go-sqlite3"
 )
@@ -186,26 +185,6 @@ func UnleaseMAC(db *sql.DB, mac net.HardwareAddr) error {
 	return nil
 }
 
-// // Function to iterate over the IP pool
-// func iterateIPPool(startIP, endIP string) {
-// 	// Parse the start and end IPs
-// 	start := net.ParseIP(startIP).To4()
-// 	end := net.ParseIP(endIP).To4()
-
-// 	if start == nil || end == nil {
-// 		fmt.Println("Invalid IP address")
-// 		return
-// 	}
-
-// 	// Iterate from start IP to end IP
-// 	for ip := start; !ipEqual(ip, end); ip = incrementIP(ip) {
-// 		fmt.Println(ip)
-// 	}
-
-// 	// Print the last IP
-// 	fmt.Println(end)
-// }
-
 // // Function to increment the last octet of the IP address
 func IncrementIP(ip net.IP) net.IP {
 	newIP := make(net.IP, len(ip))
@@ -223,31 +202,3 @@ func IncrementIP(ip net.IP) net.IP {
 func IsIPEqual(ip1, ip2 net.IP) bool {
 	return ip1.Equal(ip2)
 }
-
-// func SetupDatabase() {
-// 	db, err := sql.Open("sqlite3", "./leases.db")
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer db.Close()
-
-// 	leasesTableSQL := `CREATE TABLE IF NOT EXISTS leases (
-//         "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-//         "mac" TEXT,
-//         "ip" TEXT,
-// 		"lease_len" INTEGER,
-// 		"leased_on" TEXT,
-//     );`
-
-// 	err = db.Ping()
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-
-// 	_, err = db.Exec(leasesTableSQL)
-//     if err != nil {
-//         log.Fatal(err)
-//     }
-
-// 	log.Println("Created/Opened leases.db, created leases table, all success")
-// }
