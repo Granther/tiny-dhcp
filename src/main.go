@@ -1,12 +1,13 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	"log"
 	"log/slog"
 
 	c "gdhcp/config"
-	server "gdhcp/server"
+	s "gdhcp/server"
 )
 
 func CreateLogger(logLevel string) {
@@ -33,10 +34,11 @@ func main() {
 	CreateLogger(config.Server.LogLevel)
 	c.SetConfig(&config)
 
-	server, err := server.NewServer(config)
+	server, err := s.NewServer(config)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Error occured while instantiating server: %v", err))
 		return
 	}
+	s.SetServer(server)
 	server.Start()
 }
