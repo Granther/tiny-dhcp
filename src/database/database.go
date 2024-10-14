@@ -168,36 +168,14 @@ func GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 
 	for ip := startIP; !IsIPEqual(ip, endIP); ip = IncrementIP(ip) {
 		if !IPsContains(ips, ip) {
-			if !IsOccupiedStatic(ip) {
-				return ip, nil 
-			}
+			// if !IsOccupiedStatic(ip) {
+			return ip, nil 
+			// }
 		}
 	}
 
 	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
-}
-
-func IsOccupiedStatic(ip net.IP) bool {
-	req := netlink.NewArpRequest(
-		netlink.ARPReq{
-			Op: netlink.ArpOpRequest,
-			HwAddr: targetMAC,
-			ProtAddr: targetIP,
-			SourceHwAddr: senderMAC,
-			SourceProtAddr: senderIP,
-		},
-	)
-
-	err := netlink.SendArpRequest(req)
-	if err != nil {
-		slog.Error("Error sending ARP request", "error", err)
-		return true
-	}
-
-	fmt.Println("ARP request sent to:", targetIP.String())
-
-	return false
-}
+}																																																														
 
 func IPsContains(ips []net.IP, ip net.IP) bool {
 	for _, item := range ips {

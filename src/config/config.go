@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"encoding/json"
 	"io/ioutil"
+	"sync/atomic"
 
 	"github.com/spf13/viper"
 )
+
+var globConfig atomic.Value
 
 type DHCP struct {
 	NetworkAddr		string	 `json:"networkAddr"`
@@ -41,6 +44,17 @@ type Config struct {
 	DHCP   DHCP   `json:"dhcp"`
 }
 
+func SetConfig(c *Config) {
+	globConfig.Store(c)
+}
+
+func GetConfig() *Config {
+	// if config := globConfig.Load(); config != nil {
+	// 	return config.(*Config)
+	// }
+	config := globConfig.Load()
+	return config.(*Config)	
+}
 
 func ReadConfig(configPath string) (Config, error) {
 	var config Config
