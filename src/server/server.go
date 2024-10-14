@@ -269,16 +269,20 @@ func (s *Server) GenerateIP(db *sql.DB,  config *c.Config) (net.IP, error) {
 
 	for ip := startIP; !database.IsIPEqual(ip, endIP); ip = database.IncrementIP(ip) {
 		if !database.IPsContains(ips, ip) {
-			go s.IsOccupiedStatic(ip)
-			select {
-			case newIP := <-s.ipch:
-				slog.Debug("Got ip: %v", newIP.String())
-				return newIP, nil
-			default:
-				continue
+			if !s.IsOccupiedStatic(ip) {
+				return ip, nil
 			}
+			// select {
+			// case newIP := <-s.ipch:
+			// 	slog.Debug("Got ip: %v", newIP.String())
+			// 	return newIP, nil
+			// default:
+			// 	continue
+			// }
 		}
 	}
+	// newIP := <-s.ipch
+	// slog.Debug("NewIP", newIP.String())
 	// return ip, nil 
 
 	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")

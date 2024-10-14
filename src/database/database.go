@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net"
 	"time"
-	"slices"
+	// "slices"
 
     _ "github.com/mattn/go-sqlite3"
 )
@@ -167,7 +167,7 @@ func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
 
 func IPsContains(ips []net.IP, ip net.IP) bool {
 	for _, item := range ips {
-		if slices.Compare(item, ip) == 0 {
+		if item.Equal(ip) {
 			return true
 		}
 	}

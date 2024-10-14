@@ -119,11 +119,11 @@ func CreateOptionMap(config c.Config) (map[layers.DHCPOpt]DHCPOptionValue) {
 		layers.DHCPOptTCPTTL: 			Int16(config.DHCP.TCPTTL),
 
 		layers.DHCPOptDomainName: 		String(config.DHCP.DomainName),
-		layers.DHCPOptDomainSearch:		String(config.DHCP.DomainName),
+		// layers.DHCPOptDomainSearch:		String(config.DHCP.DomainName),
 
 		layers.DHCPOptIPForwarding: 	Bool(config.DHCP.IPForwarding),
 		layers.DHCPOptRouterDiscovery: 	Bool(config.DHCP.RouterDiscovery),
 
-		layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
+		// layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
 	}
 }

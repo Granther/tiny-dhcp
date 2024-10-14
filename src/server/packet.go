@@ -361,44 +361,46 @@ func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) {
 	return
 }
 
-func (s *Server) IsOccupiedStatic(targetIP net.IP) {
-	done := make(chan bool)
+func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
+	// Send the ARP request
 	s.sendARPRequest(s.serverMAC, s.serverIP, targetIP)
 
-	go func() {
-		packetSource := gopacket.NewPacketSource(s.handle, s.handle.LinkType())
-		for packet := range packetSource.Packets() {
-			select {
-			case <-done:
-				slog.Debug("Done channel signal sent, stopping waiting for arp..")
-				return
-			default:
-				slog.Debug("In default")
-				arpLayer := packet.Layer(layers.LayerTypeARP)
-				if arpLayer != nil {
-					slog.Debug("GOT ARP")
-					arp := arpLayer.(*layers.ARP)
-					slog.Debug(fmt.Sprintf("op: %v", arp.Operation))
-					slog.Debug(fmt.Sprintf("source: %v, target: %v", arp.SourceProtAddress, targetIP))
+	// Use a timeout mechanism (1 second) with time.After
+	timeout := time.After(1 * time.Second)
 
-					if arp.SourceProtAddress
+	packetSource := gopacket.NewPacketSource(s.handle, s.handle.LinkType())
 
-					if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
-						slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
-						return
-					}
+	for {
+		select {
+		// If we hit the timeout, stop the loop and return false
+		case <-timeout:
+			slog.Debug("Timeout reached, stopping waiting for ARP reply..")
+			return false
+
+		// Process incoming packets
+		default:
+			packet, err := packetSource.NextPacket() // Get the next packet
+			if err != nil {
+				// Handle any packet reading error, but keep going
+				slog.Debug("Error reading packet:", err)
+				continue
+			}
+
+			// Look for ARP replies
+			arpLayer := packet.Layer(layers.LayerTypeARP)
+			if arpLayer != nil {
+				arp := arpLayer.(*layers.ARP)
+
+				// If we get a valid ARP reply from the target IP, return true
+				if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
+					slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
+					return true
 				}
 			}
 		}
-	}()
-
-	time.Sleep(time.Second)
-	slog.Debug("Second is up, closing...")
-
-	close(done)
-
-	s.ipch <- targetIP
+	}
 }
+
 
 // Where we left off
 // Upon wanting ip
