@@ -373,8 +373,16 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) {
 				slog.Debug("Done channel signal sent, stopping waiting for arp..")
 				return
 			default:
+				slog.Debug("In default")
 				arpLayer := packet.Layer(layers.LayerTypeARP)
 				if arpLayer != nil {
+					slog.Debug("GOT ARP")
+					arp := arpLayer.(*layers.ARP)
+					slog.Debug(fmt.Sprintf("op: %v", arp.Operation))
+					slog.Debug(fmt.Sprintf("source: %v, target: %v", arp.SourceProtAddress, targetIP))
+
+					if arp.SourceProtAddress
+
 					if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
 						slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
 						return
@@ -382,7 +390,7 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) {
 				}
 			}
 		}
-	}
+	}()
 
 	time.Sleep(time.Second)
 	slog.Debug("Second is up, closing...")
