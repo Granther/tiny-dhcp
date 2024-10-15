@@ -158,9 +158,28 @@ func (s *Server) buildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer
 
 func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
-
 	var offeredIP net.IP
-	var err error
+
+	// Checks wether the addr exists, expired or not
+	offeredIP = database.IsMACLeased(s.db, clientMAC)
+	if oldIP != nil {
+		slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.Stirng())
+	} else if oldIP == nil {
+		requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+		if ok {
+			slog.Debug("Got requested IP from Discover, seeing if I can use it...")
+			if database.IsIPAvailable(s.db, requestedIP.Data) {
+				slog.Debug("IP from ")
+				offeredIP = requestedIP.Data
+			}
+		} else if !ok {
+			slog.Debug("Attempted to get requested IP from discover but didn't find it")
+			offeredIP, err = s.GenerateIP(s.db, &s.config); if err != nil {
+				return fmt.Errorf("%v", err)
+			}
+		}
+	}
+
 	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	if !ok {
 		log.Println("Attempted to get requested IP from discover, didn't find it, generating addr")
