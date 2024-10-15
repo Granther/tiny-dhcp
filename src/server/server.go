@@ -234,18 +234,8 @@ func (s *Server) GenerateIP(db *sql.DB,  config *c.Config) (net.IP, error) {
 			if !s.IsOccupiedStatic(ip) {
 				return ip, nil
 			}
-			// select {
-			// case newIP := <-s.ipch:
-			// 	slog.Debug("Got ip: %v", newIP.String())
-			// 	return newIP, nil
-			// default:
-			// 	continue
-			// }
 		}
 	}
-	// newIP := <-s.ipch
-	// slog.Debug("NewIP", newIP.String())
-	// return ip, nil 
-
+	
 	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
 }	
