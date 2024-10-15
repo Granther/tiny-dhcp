@@ -169,7 +169,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 			offeredIP = requestedIP.Data
 		} else {
 			var err error
-			offeredIP, err := s.GenerateIP(s.db, &s.config)
+			offeredIP, err = s.GenerateIP(s.db, &s.config)
 			if err != nil {
 				return fmt.Errorf("Failed to generate IP: %w", err)
 			}
@@ -186,7 +186,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 		return err
 	}
 
-	slog.Info("Offering Ip to client", "ip", offeredIP.String(), "mac", clientMAC.String())
+	slog.Info("Offering Ip to client", "ip", offeredIP, "mac", clientMAC.String())
 	s.sendch <- (*packetPtr).Bytes()
 
 	return nil 
@@ -215,6 +215,50 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 }
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
+
+
+
+
+
+	clientMAC := dhcpLayer.ClientHWAddr
+
+	// Checks wether the addr exists, expired or not
+	offeredIP := database.IsMACLeased(s.db, clientMAC)
+	if offeredIP != nil {
+		slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.String())
+	} else {
+		requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+		if ok && database.IsIPAvailable(s.db, requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
+			slog.Debug("Using requested IP from Discover", "ip", requestedIP.Data)
+			offeredIP = requestedIP.Data
+		} else {
+			var err error
+			offeredIP, err = s.GenerateIP(s.db, &s.config)
+			if err != nil {
+				return fmt.Errorf("Failed to generate IP: %w", err)
+			}
+			slog.Debug("Generated new IP", "ip", offeredIP)
+		}
+	}
+
+	offerLayer, err := s.constructOfferLayer(dhcpLayer, offeredIP)
+	if err != nil {
+		return err
+	}
+	packetPtr, err := s.buildStdPacket(offeredIP, clientMAC, offerLayer)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("Offering Ip to client", "ip", offeredIP, "mac", clientMAC.String())
+	s.sendch <- (*packetPtr).Bytes()
+
+	return nil 
+
+
+
+
+
 	clientMAC := dhcpLayer.ClientHWAddr
 
 	var requestedIP net.IP
