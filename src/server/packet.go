@@ -3,7 +3,6 @@ package server
 import (
 	"net"
 	"fmt"
-	"log"
 	"log/slog"
 	"slices"
 	"time"
@@ -158,62 +157,37 @@ func (s *Server) buildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer
 
 func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
-	var offeredIP net.IP
 
 	// Checks wether the addr exists, expired or not
-	offeredIP = database.IsMACLeased(s.db, clientMAC)
-	if oldIP != nil {
-		slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.Stirng())
-	} else if oldIP == nil {
-		requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-		if ok {
-			slog.Debug("Got requested IP from Discover, seeing if I can use it...")
-			if database.IsIPAvailable(s.db, requestedIP.Data) {
-				slog.Debug("IP from ")
-				offeredIP = requestedIP.Data
-			}
-		} else if !ok {
-			slog.Debug("Attempted to get requested IP from discover but didn't find it")
-			offeredIP, err = s.GenerateIP(s.db, &s.config); if err != nil {
-				return fmt.Errorf("%v", err)
-			}
-		}
-	}
-
-	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-	if !ok {
-		log.Println("Attempted to get requested IP from discover, didn't find it, generating addr")
-		offeredIP, err = s.GenerateIP(s.db, &s.config); if err != nil {
-			return fmt.Errorf("%w", err)
-		}
+	offeredIP := database.IsMACLeased(s.db, clientMAC)
+	if offeredIP != nil {
+		slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.String())
 	} else {
-		log.Println("Debug: Got requested IP from discover, checking availability...")
-		if database.IsIPAvailable(s.db, requestedIP.Data) {
-			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIP.Data))
+		requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+		if ok && database.IsIPAvailable(s.db, requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
+			slog.Debug("Using requested IP from Discover", "ip", requestedIP.Data)
 			offeredIP = requestedIP.Data
 		} else {
-			slog.Debug("Generating IP because requested one is not available")
-			oldIP := database.IsMACLeased(s.db, clientMAC)
-			if oldIP != nil {
-				offeredIP = oldIP
-			} else {
-				offeredIP, err = s.GenerateIP(s.db, &s.config); if err != nil {
-					return fmt.Errorf("%v", err)
-				}
+			var err error
+			offeredIP, err := s.GenerateIP(s.db, &s.config)
+			if err != nil {
+				return fmt.Errorf("Failed to generate IP: %w", err)
 			}
+			slog.Debug("Generated new IP", "ip", offeredIP)
 		}
 	}
 
-	offerLayer, err := s.constructOfferLayer(dhcpLayer, offeredIP); if err != nil {
+	offerLayer, err := s.constructOfferLayer(dhcpLayer, offeredIP)
+	if err != nil {
 		return err
 	}
-	packetPtr, err := s.buildStdPacket(offeredIP, clientMAC, offerLayer); if err != nil {
+	packetPtr, err := s.buildStdPacket(offeredIP, clientMAC, offerLayer)
+	if err != nil {
 		return err
 	}
-	packetBuf := *packetPtr
 
-	slog.Info(fmt.Sprintf("Offering Ip: %v to client mac: %v", offeredIP.String(), clientMAC.String()))
-	s.sendch <- packetBuf.Bytes()
+	slog.Info("Offering Ip to client", "ip", offeredIP.String(), "mac", clientMAC.String())
+	s.sendch <- (*packetPtr).Bytes()
 
 	return nil 
 }
@@ -391,26 +365,21 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
 
 	for {
 		select {
-		// If we hit the timeout, stop the loop and return false
 		case <-timeout:
 			slog.Debug("Timeout reached, stopping waiting for ARP reply..")
 			return false
 
-		// Process incoming packets
 		default:
 			packet, err := packetSource.NextPacket() // Get the next packet
 			if err != nil {
-				// Handle any packet reading error, but keep going
-				slog.Debug("Error reading packet:", err)
+				slog.Error("Error reading arp packet", "error", err)
 				continue
 			}
 
-			// Look for ARP replies
 			arpLayer := packet.Layer(layers.LayerTypeARP)
 			if arpLayer != nil {
 				arp := arpLayer.(*layers.ARP)
 
-				// If we get a valid ARP reply from the target IP, return true
 				if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
 					slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
 					return true

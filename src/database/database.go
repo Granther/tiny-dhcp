@@ -2,7 +2,6 @@ package database
 
 import (
     "database/sql"
-    "log"
 	"log/slog"
 	"fmt"
 	"net"
@@ -83,7 +82,7 @@ func IsIPAvailable(db *sql.DB, ip net.IP) (bool) {
     err := db.QueryRow(query, ip.String()).Scan(&lease.IP, &lease.LeaseLen, &lease.LeasedOn)
     if err != nil {
         if err == sql.ErrNoRows {
-            log.Println("No lease found for that IP")
+            slog.Debug("No lease found for that IP", "ip", ip.String())
             return true
         }
         return false
