@@ -30,6 +30,7 @@ type Server struct {
 	config		c.Config
 	optionsMap	map[layers.DHCPOpt]options.DHCPOptionValue
 	db			*sql.DB
+	recentCache	*
 	workerPool	chan struct{}
 	packetch 	chan packetJob
 	ipch		chan net.IP
