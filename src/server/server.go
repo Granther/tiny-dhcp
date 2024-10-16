@@ -5,6 +5,7 @@ import (
 	"net"
 	"fmt"
 	"log"
+	"time"
 	"log/slog"
 	"database/sql"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 	deviceUtils "gdhcp/device"
 	options "gdhcp/options"
 	database "gdhcp/database"
+	cache "gdhcp/cache"
 )
 
 var globServer atomic.Value
@@ -30,7 +32,7 @@ type Server struct {
 	config		c.Config
 	optionsMap	map[layers.DHCPOpt]options.DHCPOptionValue
 	db			*sql.DB
-	recentCache	*
+	packetCache	*cache.PacketCache
 	workerPool	chan struct{}
 	packetch 	chan packetJob
 	ipch		chan net.IP
@@ -81,6 +83,8 @@ func NewServer(config c.Config) (*Server, error) {
 		return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
 	}
 
+	packetCache := cache.NewPacketCache(5, time.Duration(time.Second * 10))
+
 	return &Server{
 		conn:		conn,
 		handle:		handle,
@@ -89,6 +93,7 @@ func NewServer(config c.Config) (*Server, error) {
 		config:		config,
 		optionsMap: optionsMap,
 		db:			db,
+		packetCache:packetCache,
 		workerPool:	make(chan struct{}, numWorkers),
 		packetch:	make(chan packetJob, 1000), // Can hold 1000 packets
 		ipch:		make(chan net.IP),
