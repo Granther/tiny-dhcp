@@ -221,20 +221,19 @@ func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 	if prevPacket == nil {
 		return "none", nil
 	}
-	// fmt.Printf("Last offer clinet ip: %v\n", lastClient.YourClientIP.String())
-
-	fmt.Println(prevPacket.Operation)
 
 	requestedIPOpt, requestedOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	serverIdentOpt, serverIdOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptServerID)
 
-	fmt.Println(requestedOpOk, serverIdOpOk)
-	fmt.Println(prevPacket.YourClientIP.String())
-
 	if serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.serverIP) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) && prevPacket.YourClientIP.Equal(net.IP(requestedIPOpt.Data)) {
 		return "selecting", nil
+	} else if !serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.serverIP) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
+		return "init", nil
+	} else if !serverIdOpOk && !requestedOpOk && !dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
+		return "renewing", nil
+	} else {
+		return "none", nil
 	}
-	return "none", nil
 }
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
@@ -257,27 +256,40 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	// client add must be 0.0.0.0
 	// Send nack to client if requested IP is not the one in the lease book
 	// or if it is on the wrong net
+	// If server has no idea who this guy is, stay quiet (may be another server's client)
 
-	// clientMAC := dhcpLayer.ClientHWAddr
+	// renwing
+	// no server ident
+	// no requested ip/
+	// cleint addr must be actual ip addr
+	// will be unicast from client
 
-	// // Checks wether the addr exists, expired or not
-	// offeredIP := database.IsMACLeased(s.db, clientMAC)
-	// if offeredIP != nil {
-	// 	slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.String())
-	// } else {
-	// 	requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-	// 	if ok && database.IsIPAvailable(s.db, requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
-	// 		slog.Debug("Using requested IP from Discover", "ip", requestedIP.Data)
-	// 		offeredIP = requestedIP.Data
-	// 	} else {
-	// 		var err error
-	// 		offeredIP, err = s.GenerateIP(s.db, &s.config)
-	// 		if err != nil {
-	// 			return fmt.Errorf("Failed to generate IP: %w", err)
-	// 		}
-	// 		slog.Debug("Generated new IP", "ip", offeredIP)
-	// 	}
-	// }
+	// rebinding
+	// no server ident
+	// no requested ip opt
+	// client addr is leased addr
+	// this request will be broadcast from client
+
+	clientMAC := dhcpLayer.ClientHWAddr
+
+	// Checks wether the addr exists, expired or not
+	offeredIP := database.IsMACLeased(s.db, clientMAC)
+	if offeredIP != nil {
+		slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.String())
+	} else {
+		requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+		if ok && database.IsIPAvailable(s.db, requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
+			slog.Debug("Using requested IP from Discover", "ip", requestedIP.Data)
+			offeredIP = requestedIP.Data
+		} else {
+			var err error
+			offeredIP, err = s.GenerateIP(s.db, &s.config)
+			if err != nil {
+				return fmt.Errorf("Failed to generate IP: %w", err)
+			}
+			slog.Debug("Generated new IP", "ip", offeredIP)
+		}
+	}
 
 	// var requestedIP net.IP
 	// requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)

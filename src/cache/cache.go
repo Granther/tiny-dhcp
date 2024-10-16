@@ -20,14 +20,15 @@ type PacketCache struct {
 	ttl 	time.Duration
 } 
 
-func NewPacketCache(cap int, ttl time.Duration) *PacketCache {
+func NewPacketCache(cap int, ttl int) *PacketCache {
 	slog.Debug("Creating new packet cache", "ttl", ttl, "cap", cap)
+	ttlDur := time.Duration(time.Second * time.Duration(ttl))
 
 	cache := make(map[string]*CacheNode)
 
 	return &PacketCache{
 		cap:		cap,
-		ttl:		ttl,
+		ttl:		ttlDur,
 		cache:		cache,
 	}
 }

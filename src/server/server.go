@@ -5,7 +5,6 @@ import (
 	"net"
 	"fmt"
 	"log"
-	"time"
 	"log/slog"
 	"database/sql"
 	"sync/atomic"
@@ -83,8 +82,7 @@ func NewServer(config c.Config) (*Server, error) {
 		return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
 	}
 
-	packetCache := cache.NewPacketCache(5, time.Duration(time.Second * 10))
-
+	packetCache := cache.NewPacketCache(5, 15)
 	return &Server{
 		conn:			conn,
 		handle:			handle,
@@ -112,7 +110,7 @@ func (s *Server) Start() error {
 
 	go s.receivePackets()
 	go s.sendPackets()
-	go s.packetCache.CleanJob(10)
+	go s.packetCache.CleanJob(15)
 
 	slog.Info("Server is now listening for packets/quitch")
 
