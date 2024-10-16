@@ -4,12 +4,14 @@ import (
 	"time"
 	"fmt"
 	"log/slog"
+
+	"github.com/google/gopacket/layers"
 )
 
 type CacheNode struct {
 	created		time.Time
 	key			string
-	val			interface{}
+	val			*layers.DHCPv4
 }
 
 type PacketCache struct {
@@ -30,7 +32,7 @@ func NewPacketCache(cap int, ttl time.Duration) *PacketCache {
 	}
 }
 
-func (p *PacketCache) NewCacheNode(key string, val interface{}, created time.Time) *CacheNode {
+func (p *PacketCache) NewCacheNode(key string, val *layers.DHCPv4, created time.Time) *CacheNode {
 	return &CacheNode{
 		key:		key,
 		val:		val,
@@ -38,22 +40,24 @@ func (p *PacketCache) NewCacheNode(key string, val interface{}, created time.Tim
 	}
 }
 
-func (p *PacketCache) Set(key string, val interface{}) error {
+func (p *PacketCache) Set(key string, val *layers.DHCPv4) error {
 	if len(p.cache) >= p.cap {
 		return fmt.Errorf("Packet cache capacity is full")
 	}
 	newNode := p.NewCacheNode(key, val, time.Now())
 	p.cache[key] = newNode
 
+	fmt.Println("Set item in cache")
+
 	return nil
 }
 
-func (p *PacketCache) Get(key string) (interface{}, error) {
+func (p *PacketCache) Get(key string) *layers.DHCPv4 {
 	node, ok := p.cache[key]
 	if ok {
-		return node.val, nil
+		return node.val
 	}
-	return nil, nil
+	return nil
 }
 
 func (p *PacketCache) Remove(key string) {

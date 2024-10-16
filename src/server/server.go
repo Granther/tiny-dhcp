@@ -86,19 +86,19 @@ func NewServer(config c.Config) (*Server, error) {
 	packetCache := cache.NewPacketCache(5, time.Duration(time.Second * 10))
 
 	return &Server{
-		conn:		conn,
-		handle:		handle,
-		serverIP:	serverIP.IP,
-		serverMAC:	iface.HardwareAddr,
-		config:		config,
-		optionsMap: optionsMap,
-		db:			db,
-		packetCache:packetCache,
-		workerPool:	make(chan struct{}, numWorkers),
-		packetch:	make(chan packetJob, 1000), // Can hold 1000 packets
-		ipch:		make(chan net.IP),
-		sendch:		make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
-		quitch:		make(chan struct{}),
+		conn:			conn,
+		handle:			handle,
+		serverIP:		serverIP.IP,
+		serverMAC:		iface.HardwareAddr,
+		config:			config,
+		optionsMap: 	optionsMap,
+		db:				db,
+		packetCache:	packetCache,
+		workerPool:		make(chan struct{}, numWorkers),
+		packetch:		make(chan packetJob, 1000), // Can hold 1000 packets
+		ipch:			make(chan net.IP),
+		sendch:			make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
+		quitch:			make(chan struct{}),
 	}, nil
 }
 
