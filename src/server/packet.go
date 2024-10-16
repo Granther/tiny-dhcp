@@ -4,7 +4,7 @@ import (
 	"net"
 	"fmt"
 	"log/slog"
-	"slices"
+	// "slices"
 	"time"
 
 	"github.com/google/gopacket"
@@ -214,12 +214,12 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 	return dhcpLayer, nil
 }
 
-func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) error {
-	requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-	if ok && requestedIPOpt.Equals(s.serverIP) && dhcpLayer.ClientIP.Equals(net.IP{0, 0, 0, 0}) {
-		return "selecting"
+func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
+	serverIdentOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptServerID)
+	if ok && net.IP(serverIdentOpt.Data).Equal(s.serverIP) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
+		return "selecting", nil
 	}
-	return "none"
+	return "none", nil
 }
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
