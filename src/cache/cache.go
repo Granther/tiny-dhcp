@@ -73,10 +73,12 @@ func (p *PacketCache) Clean() {
 	}
 }
 
-func (p *PacketCache) CleanJob(frequency time.Duration) {
+func (p *PacketCache) CleanJob(frequency int) {
+	freqTime := time.Duration(time.Second * time.Duration(frequency))
+
 	for {
-		time.Sleep(frequency)
-		slog.Debug("Cleaning cache...")
+		time.Sleep(freqTime)
+		slog.Debug("Cleaning cache...", "freq", freqTime)
 		p.Clean()
 	}
 }

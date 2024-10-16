@@ -217,14 +217,19 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 
 func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 
-	lastClient := s.packetCache.Get(string(dhcpLayer.Xid))
-	if lastClient == nil {
+	prevPacket := s.packetCache.Get(string(dhcpLayer.Xid))
+	if prevPacket == nil {
 		return "none", nil
 	}
-	fmt.Printf("Last offer clinet ip: %v\n", lastClient.YourClientIP.String())
+	// fmt.Printf("Last offer clinet ip: %v\n", lastClient.YourClientIP.String())
 
-	serverIdentOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptServerID)
-	if ok && net.IP(serverIdentOpt.Data).Equal(s.serverIP) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
+	requestedIPOpt, requestedOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+	serverIdentOpt, serverIdOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptServerID)
+
+	fmt.Println(requestedOpOk, serverIdOpOk)
+	fmt.Println(prevPacket.YourClientIP.String())
+
+	if serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.serverIP) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) && prevPacket.YourClientIP.Equal(net.IP(requestedIPOpt.Data)) {
 		return "selecting", nil
 	}
 	return "none", nil
