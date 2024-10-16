@@ -112,6 +112,7 @@ func (s *Server) Start() error {
 
 	go s.receivePackets()
 	go s.sendPackets()
+	go s.packetCache.CleanJob(time.Duration(time.Second * 5))
 
 	slog.Info("Server is now listening for packets/quitch")
 

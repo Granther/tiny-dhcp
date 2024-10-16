@@ -21,7 +21,7 @@ type PacketCache struct {
 } 
 
 func NewPacketCache(cap int, ttl time.Duration) *PacketCache {
-	slog.Debug("Creating new packet cache")
+	slog.Debug("Creating new packet cache", "ttl", ttl, "cap", cap)
 
 	cache := make(map[string]*CacheNode)
 
@@ -47,7 +47,7 @@ func (p *PacketCache) Set(key string, val *layers.DHCPv4) error {
 	newNode := p.NewCacheNode(key, val, time.Now())
 	p.cache[key] = newNode
 
-	fmt.Println("Set item in cache")
+	slog.Debug("Set item in cache", "key", key)
 
 	return nil
 }
@@ -67,8 +67,16 @@ func (p *PacketCache) Remove(key string) {
 func (p *PacketCache) Clean() {
 	for key, node := range p.cache {
 		if time.Since(node.created) > p.ttl {
-			fmt.Println("Cleaning node")
+			slog.Debug("Cleaning node", "xid", key)
 			p.Remove(key)
 		}
+	}
+}
+
+func (p *PacketCache) CleanJob(frequency time.Duration) {
+	for {
+		time.Sleep(frequency)
+		slog.Debug("Cleaning cache...")
+		p.Clean()
 	}
 }
