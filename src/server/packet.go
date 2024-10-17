@@ -299,14 +299,18 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 		}
 	} else if requestType == "renewing" {
 		currentIP := database.IsMACLeased(s.db, clientMAC)
-		if currentIP != nil {
-			if currentIP.Equal(dhcpLayer.ClientIP) {
-				slog.Debug("Mac is assigned to current ip, renewing")
-			// Renew the ip lease
-			err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
-				return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
-			}			
-		}
+		fmt.Println(currentIP.String())
+		// if currentIP != nil {
+		// 	if dhcpLayer.ClientIP.Equal(currentIP) {
+		// 		// slog.Debug("Mac is assigned to current ip, renewing")
+		// 		fmt.Println("ddd")
+		// 	// Renew the ip lease
+		// 	err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
+		// 		return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
+		// 	}			
+		// }
+
+		requestedIP = currentIP
 	}
 
 	ackLayer, err := s.constructAckLayer(dhcpLayer, requestedIP)
