@@ -4,10 +4,8 @@ import (
 	"log"
 	"net"
 
-
 	"github.com/google/gopacket/layers"
 	// "github.com/google/gopacket"
-	
 	// c "gdhcp/config"
 )
 
@@ -25,7 +23,7 @@ func GetDHCPOption(options layers.DHCPOptions, optType layers.DHCPOpt) (layers.D
 func GetMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool) {
 	opt, found := GetDHCPOption(options, layers.DHCPOptMessageType)
 
-	// If the MessageType option is valid, try to convert 
+	// If the MessageType option is valid, try to convert
 	if found && len(opt.Data) > 0 {
 		return layers.DHCPMsgType(opt.Data[0]), true
 	}
@@ -78,7 +76,7 @@ func GetInterfaceHA(interfaceName string) (net.HardwareAddr, error) {
 }
 
 // func JsonIPListToBytes(jsonList []string) []bytes {
-// 	var byteSlice []byte 
+// 	var byteSlice []byte
 
 // 	for ip := range jsonList {
 // 		byteSlice = append(byteSlice, net.ParseIP(ip).To4())
