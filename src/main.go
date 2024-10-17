@@ -39,6 +39,5 @@ func main() {
 		slog.Error(fmt.Sprintf("Error occured while instantiating server: %v", err))
 		return
 	}
-	s.SetServer(server)
 	server.Start()
 }
