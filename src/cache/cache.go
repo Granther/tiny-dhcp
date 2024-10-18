@@ -74,6 +74,9 @@ func (c *Cache) FillQueue(num int) error {
 	// Generate addr from bottom of thing, if in cache or in queue, skip
 	// else, add
 
+	// Pass val to new addrs
+	// If it has been longer than val.lease len since val.leased on, expired, add to back of queue as available
+
 	// Clear Queue, fuck it
 	c.AddrQueue.Empty()
 

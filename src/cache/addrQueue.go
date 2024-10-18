@@ -82,6 +82,31 @@ func (q *AddrQueue) enQueue(val net.IP) bool {
 	return true
 }
 
+func (q *AddrQueue) postQueue(ip net.IP) bool {
+	if q.isFull() {
+		return false
+	}
+
+	newNode := NewListNode(ip, nil, nil)
+	q.nodeEnd(newNode)
+	q.space -= 1
+
+	return true
+}
+
+func (q *AddrQueue) nodeEnd(node *ListNode) {
+	// Fix left
+	q.left.next = node.next
+	q.left.next.prev = q.left
+	// Fix Node
+	node.next = q.right
+	node.prev = q.right.prev
+	// Fix right
+	q.right.prev.next = node
+	q.right.prev = node
+}
+
+
 func (q *AddrQueue) deQueue() bool {
 	if q.isEmpty() {
 		return false
@@ -93,17 +118,10 @@ func (q *AddrQueue) deQueue() bool {
 	return true
 }
 
-func (q *AddrQueue) RearToEnd() {
+// wtf?
+func (q *AddrQueue) FrontToEnd() {
 	node := q.left.next
-	// Fix left
-	q.left.next = node.next
-	q.left.next.prev = q.left
-	// Fix Node
-	node.next = q.right
-	node.prev = q.right.prev
-	// Fix right
-	q.right.prev.next = node
-	q.right.prev = node
+	q.nodeEnd(node)
 }
 
 func (q *AddrQueue) PrintQueue() {
