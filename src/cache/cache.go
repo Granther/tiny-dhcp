@@ -30,6 +30,10 @@ func NewCache(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPoo
 
 func (c *Cache) Init(db *sql.DB, num int) error {
 	err := c.ReadLeasesFromDB(db)
+	if err != nil {
+		return nil
+	}
+
 	err = c.FillQueue(num)
 
 	return err
@@ -47,12 +51,12 @@ func (c *Cache) ReadLeasesFromDB(db *sql.DB) error {
 	for _, lease := range leases {
 		mac, err := net.ParseMAC(lease.MAC)
 		if err != nil {
-			return fmt.Errorf("Unable to extract MAC from DatabaseLease: %v", err)
+			return fmt.Errorf("unable to extract mac from database lease: %v", err)
 		}
 
 		leasedOn, err := time.Parse("2006-01-02 15:04:05", lease.LeasedOn)
 		if err != nil {
-			return fmt.Errorf("Unable to parse str time from db to time.Time: %v", err)
+			return fmt.Errorf("unable to parse str time from db to time: %v", err)
 		}
 
 		ip := net.ParseIP(lease.IP)
@@ -60,6 +64,8 @@ func (c *Cache) ReadLeasesFromDB(db *sql.DB) error {
 		leaseNode := NewLeaseNode(ip, mac, time.Duration(lease.LeaseLen), leasedOn)
 		c.LeasesCache.Put(leaseNode)
 	}
+
+	return nil
 }
 
 func (c *Cache) FillQueue(num int) error {
@@ -75,8 +81,9 @@ func (c *Cache) FillQueue(num int) error {
 	endIP := net.ParseIP(c.AddrPool[1])
 
 	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < num; ip = database.IncrementIP(ip) {
-		_, ok := c.LeasesCache.ipCache[&ip]
-		if !ok { // Doesnt exist in leases
+		val := c.LeasesCache.IPGet(ip)
+		if val == nil { // Doesnt exist in leases
+			fmt.Printf("val; %v", val)
 			newAddrs = append(newAddrs, ip)
 		}
 	}

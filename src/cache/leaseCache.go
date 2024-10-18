@@ -1,8 +1,9 @@
-package cache 
+package cache
 
 import (
-	"time"
+	"fmt"
 	"net"
+	"time"
 )
 
 // Have a queue of available addrs
@@ -11,24 +12,24 @@ import (
 // If queue is empty, add additionalt pool of N available addrs (if possible)
 
 type LeasesCache struct {
-	ipCache			map[*net.IP]*LeaseNode
-	macCache		map[*net.HardwareAddr]*LeaseNode
-	availableQueue	*AddrQueue
+	ipCache        map[*net.IP]*LeaseNode
+	macCache       map[*net.HardwareAddr]*LeaseNode
+	availableQueue *AddrQueue
 }
 
 type LeaseNode struct {
-	ip			net.IP
-	mac			net.HardwareAddr
-	leaseLen	time.Duration
-	leasedOn	time.Time
+	ip       net.IP
+	mac      net.HardwareAddr
+	leaseLen time.Duration
+	leasedOn time.Time
 }
 
 func NewLeaseNode(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, leasedOn time.Time) *LeaseNode {
-	return &LeaseNode {
-		ip:			ip,
-		mac:		mac,
-		leaseLen:	leaseLen,
-		leasedOn:	leasedOn,
+	return &LeaseNode{
+		ip:       ip,
+		mac:      mac,
+		leaseLen: leaseLen,
+		leasedOn: leasedOn,
 	}
 }
 
@@ -37,10 +38,10 @@ func NewLeasesCache(max int) *LeasesCache {
 	macCache := make(map[*net.HardwareAddr]*LeaseNode)
 	availableQueue := NewAddrQueue(max)
 
-	return &LeasesCache {
-		ipCache: 		ipCache,
-		macCache:		macCache,
-		availableQueue:	availableQueue,
+	return &LeasesCache{
+		ipCache:        ipCache,
+		macCache:       macCache,
+		availableQueue: availableQueue,
 	}
 }
 
@@ -73,4 +74,10 @@ func (l *LeasesCache) IPRemove(ip net.IP) {
 
 func (l *LeasesCache) MACRemove(mac net.HardwareAddr) {
 	delete(l.macCache, &mac)
+}
+
+func (l *LeasesCache) PrintCache() {
+	for key, val := range l.ipCache {
+		fmt.Printf("IP: %v, MAC: %v", (*key).String(), (val.mac).String())
+	}
 }

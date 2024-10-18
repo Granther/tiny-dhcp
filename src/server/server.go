@@ -72,18 +72,18 @@ func NewServer(config c.Config) (*Server, error) {
 	optionsMap := options.CreateOptionMap(config)
 	numWorkers := config.Server.NumWorkers
 
-	// db, err := database.ConnectDatabase()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
-	// }
-	var db *sql.DB
+	db, err := database.ConnectDatabase()
+	if err != nil {
+		return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
+	}
 
 	// packetCache := cache.NewPacketCache(5, 15)
 	// addrQueue := cache.NewAddrQueue(30)
 
 	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool)
-	err = newCache.Init(20)
+	err = newCache.Init(db, 20)
 	newCache.AddrQueue.PrintQueue()
+	newCache.LeasesCache.PrintCache()
 
 	return &Server{
 		conn:       conn,
