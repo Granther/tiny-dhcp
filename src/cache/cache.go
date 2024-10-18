@@ -8,6 +8,7 @@ import (
 	"time"
 
 	database "gdhcp/database"
+	types "gdhcp/types"
 )
 
 type Cache struct {
@@ -108,12 +109,33 @@ func (c *Cache) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error {
 	return nil
 }
 
+func (c *Cache) Unlease(node *LeaseNode) {
+	dbLease := &types.DatabaseLease{
+		IP:       node.ip.String(),
+		MAC:      node.mac.String(),
+		LeasedOn: node.leasedOn.Parse(),
+		LeaseLen: int(node.leaseLen.Seconds()),
+	}
+
+	database.Unlease(&dbLease)
+}
+
+func (c *Cache) UnleaseIP(ip net.IP) {
+	node := c.LeasesCache.IPGet(ip)
+	c.Unlease(node)
+}
+
+func (c *Cache) UnleaseMAC(mac net.HardwareAddr) {
+	node := c.LeasesCache.MACGet(mac)
+	c.Unlease(node)
+}
+
 func (c *Cache) IsIPAvailable(ip net.IP) bool {
 	return c.LeasesCache.IPGet(ip) == nil
 }
 
 func (c *Cache) IsMACLeased(mac net.HardwareAddr) net.IP {
-	node := c.LeasesCache.MACGet(mac) 
+	node := c.LeasesCache.MACGet(mac)
 	if node == nil {
 		return nil
 	}

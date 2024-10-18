@@ -25,19 +25,19 @@ func processMAC(mac net.HardwareAddr) (net.HardwareAddr, bool, error) {
 		slog.Debug("Mac is good")
 		return mac, false, nil
 	} else {
-		return net.HardwareAddr{}, false, fmt.Errorf("Error processing mac addr")
+		return net.HardwareAddr{}, false, fmt.Errorf("error processing mac addr")
 	}
 }
 
 func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
 	clientMAC, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptClientID)
 	if !ok {
-		return nil, fmt.Errorf("Unable to get client mac from dhcp layer")
+		return nil, fmt.Errorf("unable to get client mac from dhcp layer")
 	}
 
 	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data))
 	if err != nil {
-		return nil, fmt.Errorf("Error processing mac to usable form: %v", err)
+		return nil, fmt.Errorf("error processing mac to usable form: %v", err)
 	}
 
 	return mac, nil
@@ -174,7 +174,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 			var err error
 			offeredIP, err = s.GenerateIP(s.db, &s.config)
 			if err != nil {
-				return fmt.Errorf("Failed to generate IP: %w", err)
+				return fmt.Errorf("failed to generate ip: %w", err)
 			}
 			slog.Debug("Generated new IP", "ip", offeredIP)
 		}
@@ -219,7 +219,6 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 }
 
 func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
-
 	prevPacket := s.cache.PacketCache.Get(string(dhcpLayer.Xid))
 
 	requestedIPOpt, requestedOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
@@ -239,8 +238,6 @@ func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 	}
 
 	return "none", nil
-
-	// net.IP(serverIdentOpt.Data).Equal(s.serverIP
 }
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
@@ -325,12 +322,20 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 			// if dhcpLayer.ClientIP.Equal(currentIP) {
 				// slog.Debug("Mac is assigned to current ip, renewing")
 			// Renew the ip lease
+			slog.Debug("CurrentIP isnt nil, renewing...")
 			err := s.cache.LeaseIP(requestedIP, clientMAC, s.config.DHCP.LeaseLen)
 			if err != nil {
 				return fmt.Errorf("unable to renew lease for requested ip: %w", err)
 			}
+			requestedIP = currentIP
+		} else {
+			slog.Debug("Client is trying to renew, but it not know by this server, sending NACK")
+			err := s.createNack(dhcpLayer)
+			if err != nil {
+				return fmt.Errorf("error sending nack in response to request")
+			}
+			return nil
 		}
-		requestedIP = currentIP
 	} else {
 		slog.Warn("Request type did not fit, dropping packet")
 		return nil

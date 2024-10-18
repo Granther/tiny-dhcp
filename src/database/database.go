@@ -116,7 +116,7 @@ func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen time.Duration
 	_, _ = db.Exec(leaseSelect, ip.String(), mac.String())
 
 	intLen := int(leaseLen.Seconds())
-	currentTime := leasedOn.Format("2006-01-02 15:04:05")
+	currentTime := FormatTime(leasedOn)
     insertLease := `INSERT INTO leases (ip, mac, lease_len, leased_on) VALUES (?, ?, ?, ?);`
     _, err := db.Exec(insertLease, ip.String(), mac.String(), intLen, currentTime)
     if err != nil {
@@ -126,8 +126,12 @@ func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen time.Duration
 	return nil
 }
 
-func UnleaseIP(db *sql.DB, ip net.IP) (error) {
+func Unlease(db *sql.DB, dbLease *types.DatabaseLease) error {
 	return nil
+}
+
+func FormatTime(time time.Time) string {
+	return time.Format("2006-01-02 15:04:05")
 }
 
 func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
