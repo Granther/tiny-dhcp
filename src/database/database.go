@@ -127,7 +127,10 @@ func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen time.Duration
 }
 
 func Unlease(db *sql.DB, dbLease *types.DatabaseLease) error {
-	return nil
+	leaseSelect := `DELETE FROM leases WHERE ip = ? AND mac = ?;`
+	_, err := db.Exec(leaseSelect, dbLease.IP, dbLease.MAC)
+
+	return err
 }
 
 func FormatTime(time time.Time) string {

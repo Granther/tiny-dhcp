@@ -113,11 +113,11 @@ func (c *Cache) Unlease(node *LeaseNode) {
 	dbLease := &types.DatabaseLease{
 		IP:       node.ip.String(),
 		MAC:      node.mac.String(),
-		LeasedOn: node.leasedOn.Parse(),
+		LeasedOn: database.FormatTime(node.leasedOn),
 		LeaseLen: int(node.leaseLen.Seconds()),
 	}
 
-	database.Unlease(&dbLease)
+	database.Unlease(c.LeasesCache.db, dbLease)
 }
 
 func (c *Cache) UnleaseIP(ip net.IP) {
