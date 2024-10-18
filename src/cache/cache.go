@@ -41,7 +41,9 @@ func (c *Cache) ReadLeasesFromDB(db *sql.DB) error {
 		return err
 	}
 
-	
+	for i, lease := range leases {
+		
+	}
 }
 
 func (c *Cache) FillQueue(num int) error {

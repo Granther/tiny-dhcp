@@ -8,16 +8,8 @@ import (
 	"time"
 
     _ "github.com/mattn/go-sqlite3"
+	types "gdhcp/types"
 )
-
-type Lease struct {
-	ID			int
-	IP			string
-	MAC			string
-	Static		bool
-	LeaseLen	int
-	LeasedOn	string
-}
 
 func CreateLeasesTable(db *sql.DB) (error) {
 	leasesTableSQL := `CREATE TABLE IF NOT EXISTS leases (
@@ -76,7 +68,7 @@ func IsExpired(leaseLen int, leasedOn string) (bool) {
 }
 
 func IsIPAvailable(db *sql.DB, ip net.IP) (bool) {
-	var lease Lease
+	var lease types.DatabaseLease
 
     query := "SELECT ip, lease_len, leased_on FROM leases WHERE ip = ?;"
     err := db.QueryRow(query, ip.String()).Scan(&lease.IP, &lease.LeaseLen, &lease.LeasedOn)
@@ -95,7 +87,7 @@ func IsIPAvailable(db *sql.DB, ip net.IP) (bool) {
 }
 
 func IsMACLeased(db *sql.DB, mac net.HardwareAddr) (net.IP) {
-	var lease Lease
+	var lease types.DatabaseLease
 
     query := "SELECT ip, mac, lease_len, leased_on FROM leases WHERE mac = ?;"
     err := db.QueryRow(query, mac.String()).Scan(&lease.IP, &lease.MAC, &lease.LeaseLen, &lease.LeasedOn)
@@ -148,7 +140,7 @@ func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
 
     var ips []net.IP
     for rows.Next() {
-        var lease Lease
+        var lease types.DatabaseLease
         err = rows.Scan(&lease.ID, &lease.IP)
         if err != nil {
 			if err == sql.ErrNoRows {
@@ -163,12 +155,7 @@ func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
 	return ips, nil
 }
 
-func GetLeases(db *sql.DB) ([]struct{
-	IP			string
-	MAC			string
-	LeaseLen	int
-	LeasedOn	string
-}, error) {
+func GetLeases(db *sql.DB) ([]types.DatabaseLease, error) {
     query := "SELECT ip, mac, lease_len, leased_on FROM leases"
 
     rows, err := db.Query(query)
@@ -177,20 +164,10 @@ func GetLeases(db *sql.DB) ([]struct{
     }
     defer rows.Close()
 
-    var leases []struct{
-		IP			string
-		MAC			string
-		LeaseLen	int
-		LeasedOn	string
-	}
+    var leases []types.DatabaseLease
 
     for rows.Next() {
-        var lease struct{
-			IP			string
-			MAC			string
-			LeaseLen	int
-			LeasedOn	string
-		}
+        var lease types.DatabaseLease
 
         err = rows.Scan(&lease.IP, &lease.MAC, &lease.LeaseLen, &lease.LeasedOn)
         if err != nil {
