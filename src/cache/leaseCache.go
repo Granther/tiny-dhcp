@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"database/sql"
 	"fmt"
+	database "gdhcp/database"
 	"net"
 	"time"
 )
@@ -12,9 +14,9 @@ import (
 // If queue is empty, add additionalt pool of N available addrs (if possible)
 
 type LeasesCache struct {
+	db             *sql.DB
 	ipCache        map[[16]byte]*LeaseNode
 	macCache       map[string]*LeaseNode
-	availableQueue *AddrQueue
 }
 
 type LeaseNode struct {
@@ -33,15 +35,14 @@ func NewLeaseNode(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, lease
 	}
 }
 
-func NewLeasesCache(max int) *LeasesCache {
+func NewLeasesCache(db *sql.DB, max int) *LeasesCache {
 	ipCache := make(map[[16]byte]*LeaseNode)
 	macCache := make(map[string]*LeaseNode)
-	availableQueue := NewAddrQueue(max)
 
 	return &LeasesCache{
+		db:             db,
 		ipCache:        ipCache,
 		macCache:       macCache,
-		availableQueue: availableQueue,
 	}
 }
 
@@ -49,6 +50,8 @@ func (l *LeasesCache) Put(newNode *LeaseNode) {
 	ip := IpTo16(newNode.ip)
 	l.ipCache[*ip] = newNode
 	l.macCache[newNode.mac.String()] = newNode
+
+	database.LeaseIP(l.db, newNode.ip, newNode.mac, newNode.leaseLen, newNode.leasedOn)
 }
 
 func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
@@ -57,7 +60,6 @@ func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
 	if ok {
 		return val
 	}
-
 	return nil
 }
 
@@ -66,7 +68,6 @@ func (l *LeasesCache) MACGet(mac net.HardwareAddr) *LeaseNode {
 	if ok {
 		return val
 	}
-
 	return nil
 }
 

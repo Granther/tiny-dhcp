@@ -80,7 +80,7 @@ func NewServer(config c.Config) (*Server, error) {
 	// packetCache := cache.NewPacketCache(5, 15)
 	// addrQueue := cache.NewAddrQueue(30)
 
-	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool)
+	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool, db)
 	err = newCache.Init(db, 20)
 	newCache.AddrQueue.PrintQueue()
 	newCache.LeasesCache.PrintCache()

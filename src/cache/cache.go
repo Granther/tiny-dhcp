@@ -17,13 +17,13 @@ type Cache struct {
 	PacketCache *PacketCache
 }
 
-func NewCache(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string) *Cache {
+func NewCache(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string, db *sql.DB) *Cache {
 	slog.Debug("Creating new generat cache, and all children")
 
 	return &Cache{
 		AddrPool:    addrPool,
 		AddrQueue:   NewAddrQueue(queueMax),
-		LeasesCache: NewLeasesCache(leasesMax),
+		LeasesCache: NewLeasesCache(db, leasesMax),
 		PacketCache: NewPacketCache(packetCap, packetTTL),
 	}
 }
@@ -94,6 +94,13 @@ func (c *Cache) FillQueue(num int) error {
 			return nil
 		}
 	}
+
+	return nil
+}
+
+func (c *Cache) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration) error {
+	newNode := NewLeaseNode(ip, mac, leaseLen, time.Now())
+	c.LeasesCache.Put(newNode)
 
 	return nil
 }
