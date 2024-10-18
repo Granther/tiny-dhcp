@@ -271,6 +271,12 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	// client addr is leased addr
 	// this request will be broadcast from client
 
+	// Cache methods
+	// IsIPAvailable
+	// lease ip
+	// is mac leases
+	// 
+
 	clientMAC := dhcpLayer.ClientHWAddr
 	var requestedIP net.IP
 

@@ -1,7 +1,7 @@
 {
     "server": {
         "port": 67,
-        "listenInterface": "Ethernet",
+        "listenInterface": "wlp2s0",
         "numWorkers": 10,
         "logLevel": "debug"
     },

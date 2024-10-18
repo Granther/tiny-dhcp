@@ -163,6 +163,49 @@ func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
 	return ips, nil
 }
 
+func GetLeases(db *sql.DB) ([]struct{
+	IP			string
+	MAC			string
+	LeaseLen	int
+	LeasedOn	string
+}, error) {
+    query := "SELECT ip, mac, lease_len, leased_on FROM leases"
+
+    rows, err := db.Query(query)
+    if err != nil {
+        return nil, fmt.Errorf("%v", err)
+    }
+    defer rows.Close()
+
+    var leases []struct{
+		IP			string
+		MAC			string
+		LeaseLen	int
+		LeasedOn	string
+	}
+
+    for rows.Next() {
+        var lease struct{
+			IP			string
+			MAC			string
+			LeaseLen	int
+			LeasedOn	string
+		}
+
+        err = rows.Scan(&lease.IP, &lease.MAC, &lease.LeaseLen, &lease.LeasedOn)
+        if err != nil {
+			if err == sql.ErrNoRows {
+				break
+			}
+            return nil, fmt.Errorf("%v", err)
+        }
+
+        leases = append(leases, lease)
+    }
+
+	return leases, nil
+}
+
 func IPsContains(ips []net.IP, ip net.IP) bool {
 	for _, item := range ips {
 		if item.Equal(ip) {

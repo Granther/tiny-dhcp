@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"sync/atomic"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -20,8 +19,6 @@ import (
 	dhcpUtils "gdhcp/dhcp"
 	options "gdhcp/options"
 )
-
-var globServer atomic.Value
 
 type Server struct {
 	conn       *net.UDPConn
@@ -64,10 +61,10 @@ func NewServer(config c.Config) (*Server, error) {
 		return nil, fmt.Errorf("Error creating server UDP listener: %v\n", err)
 	}
 
-	handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
+	// handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
 
 	// Create handle for responding to requests later on
-	// handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
+	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w\n", err)
 	}
@@ -85,7 +82,7 @@ func NewServer(config c.Config) (*Server, error) {
 	// addrQueue := cache.NewAddrQueue(30)
 
 	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool)
-	newCache.Init(20)
+	err = newCache.Init(20)
 	newCache.AddrQueue.PrintQueue()
 
 	return &Server{

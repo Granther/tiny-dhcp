@@ -79,7 +79,7 @@ func (p *PacketCache) CleanJob(frequency int) {
 
 	for {
 		time.Sleep(freqTime)
-		slog.Debug("Cleaning cache...", "freq", freqTime)
+		// slog.Debug("Cleaning cache...", "freq", freqTime)
 		p.Clean()
 	}
 }
