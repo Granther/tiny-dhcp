@@ -44,3 +44,33 @@ func NewLeasesCache(max int) *LeasesCache {
 	}
 }
 
+func (l *LeasesCache) Put(newNode *LeaseNode) {
+	l.ipCache[&newNode.ip] = newNode
+	l.macCache[&newNode.mac] = newNode
+}
+
+func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
+	val, ok := l.ipCache[&ip]
+	if ok {
+		return val
+	}
+
+	return nil
+}
+
+func (l *LeasesCache) MACGet(mac net.HardwareAddr) *LeaseNode {
+	val, ok := l.macCache[&mac]
+	if ok {
+		return val
+	}
+
+	return nil
+}
+
+func (l *LeasesCache) IPRemove(ip net.IP) {
+	delete(l.ipCache, &ip)
+}
+
+func (l *LeasesCache) MACRemove(mac net.HardwareAddr) {
+	delete(l.macCache, &mac)
+}

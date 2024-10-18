@@ -32,11 +32,16 @@ func (c *Cache) Init(db *sql.DB, num int) error {
 	return err
 }
 
-func (c *Cache) ReadLeasesFromDB(db *sql.DB) {
+func (c *Cache) ReadLeasesFromDB(db *sql.DB) error {
 	// Read leases from db
 	// Build leasenode object
 	// Add to mac and ip cache
-	database.GetLeasedIPs(db)
+	leases, err := database.GetLeases(db)
+	if err != nil {
+		return err
+	}
+
+	
 }
 
 func (c *Cache) FillQueue(num int) error {

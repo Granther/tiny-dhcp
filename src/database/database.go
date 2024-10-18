@@ -142,7 +142,7 @@ func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
 
     rows, err := db.Query(query)
     if err != nil {
-        return nil, fmt.Errorf("%v\n", err)
+        return nil, fmt.Errorf("%v", err)
     }
     defer rows.Close()
 
@@ -154,7 +154,7 @@ func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
 			if err == sql.ErrNoRows {
 				break
 			}
-            return nil, fmt.Errorf("%v\n", err)
+            return nil, fmt.Errorf("%v", err)
         }
 
         ips = append(ips, net.ParseIP(lease.IP))
