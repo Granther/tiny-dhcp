@@ -12,8 +12,8 @@ import (
 // If queue is empty, add additionalt pool of N available addrs (if possible)
 
 type LeasesCache struct {
-	ipCache        map[*net.IP]*LeaseNode
-	macCache       map[*net.HardwareAddr]*LeaseNode
+	ipCache        map[[16]byte]*LeaseNode
+	macCache       map[string]*LeaseNode
 	availableQueue *AddrQueue
 }
 
@@ -34,8 +34,8 @@ func NewLeaseNode(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, lease
 }
 
 func NewLeasesCache(max int) *LeasesCache {
-	ipCache := make(map[*net.IP]*LeaseNode)
-	macCache := make(map[*net.HardwareAddr]*LeaseNode)
+	ipCache := make(map[[16]byte]*LeaseNode)
+	macCache := make(map[string]*LeaseNode)
 	availableQueue := NewAddrQueue(max)
 
 	return &LeasesCache{
@@ -46,12 +46,14 @@ func NewLeasesCache(max int) *LeasesCache {
 }
 
 func (l *LeasesCache) Put(newNode *LeaseNode) {
-	l.ipCache[&newNode.ip] = newNode
-	l.macCache[&newNode.mac] = newNode
+	ip := IpTo16(newNode.ip)
+	l.ipCache[*ip] = newNode
+	l.macCache[newNode.mac.String()] = newNode
 }
 
 func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
-	val, ok := l.ipCache[&ip]
+	ipBytes := IpTo16(ip)
+	val, ok := l.ipCache[*ipBytes]
 	if ok {
 		return val
 	}
@@ -60,7 +62,7 @@ func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
 }
 
 func (l *LeasesCache) MACGet(mac net.HardwareAddr) *LeaseNode {
-	val, ok := l.macCache[&mac]
+	val, ok := l.macCache[mac.String()]
 	if ok {
 		return val
 	}
@@ -69,15 +71,22 @@ func (l *LeasesCache) MACGet(mac net.HardwareAddr) *LeaseNode {
 }
 
 func (l *LeasesCache) IPRemove(ip net.IP) {
-	delete(l.ipCache, &ip)
+	ipBytes := IpTo16(ip)
+	delete(l.ipCache, *ipBytes)
 }
 
 func (l *LeasesCache) MACRemove(mac net.HardwareAddr) {
-	delete(l.macCache, &mac)
+	delete(l.macCache, mac.String())
 }
 
 func (l *LeasesCache) PrintCache() {
-	for key, val := range l.ipCache {
-		fmt.Printf("IP: %v, MAC: %v", (*key).String(), (val.mac).String())
+	for _, val := range l.ipCache {
+		fmt.Printf("IP: %v, MAC: %v\n", val.ip.String(), val.mac.String())
 	}
+}
+
+func IpTo16(ip net.IP) *[16]byte {
+	var ipArr [16]byte
+	copy(ipArr[:], ip.To16())
+	return &ipArr
 }

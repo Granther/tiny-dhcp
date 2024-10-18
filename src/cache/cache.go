@@ -83,7 +83,6 @@ func (c *Cache) FillQueue(num int) error {
 	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < num; ip = database.IncrementIP(ip) {
 		val := c.LeasesCache.IPGet(ip)
 		if val == nil { // Doesnt exist in leases
-			fmt.Printf("val; %v", val)
 			newAddrs = append(newAddrs, ip)
 		}
 	}
