@@ -2,9 +2,12 @@ package cache
 
 import (
 	"database/sql"
-	"gdhcp/database"
+	"fmt"
 	"log/slog"
 	"net"
+	"time"
+
+	database "gdhcp/database"
 )
 
 type Cache struct {
@@ -41,8 +44,21 @@ func (c *Cache) ReadLeasesFromDB(db *sql.DB) error {
 		return err
 	}
 
-	for i, lease := range leases {
-		
+	for _, lease := range leases {
+		mac, err := net.ParseMAC(lease.MAC)
+		if err != nil {
+			return fmt.Errorf("Unable to extract MAC from DatabaseLease: %v", err)
+		}
+
+		leasedOn, err := time.Parse("2006-01-02 15:04:05", lease.LeasedOn)
+		if err != nil {
+			return fmt.Errorf("Unable to parse str time from db to time.Time: %v", err)
+		}
+
+		ip := net.ParseIP(lease.IP)
+
+		leaseNode := NewLeaseNode(ip, mac, time.Duration(lease.LeaseLen), leasedOn)
+		c.LeasesCache.Put(leaseNode)
 	}
 }
 

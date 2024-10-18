@@ -119,7 +119,7 @@ func LeaseIP(db *sql.DB, ip net.IP, mac net.HardwareAddr, leaseLen int) (error) 
     insertLease := `INSERT INTO leases (ip, mac, lease_len, leased_on) VALUES (?, ?, ?, ?);`
     _, err := db.Exec(insertLease, ip.String(), mac.String(), leaseLen, currentTime)
     if err != nil {
-        return fmt.Errorf("Error leasing IP: %v\n", err)
+        return fmt.Errorf("Error leasing IP: %v", err)
     }
 
 	return nil
