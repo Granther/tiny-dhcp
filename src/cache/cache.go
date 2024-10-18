@@ -14,6 +14,8 @@ type Cache struct {
 }
 
 func NewCache(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string) *Cache {
+	slog.Debug("Creating new generat cache, and all children")
+	
 	return &Cache{
 		AddrPool:    addrPool,
 		AddrQueue:   NewAddrQueue(queueMax),
@@ -36,11 +38,15 @@ func (c *Cache) FillAddrs(num int) error {
 	c.AddrQueue.Empty()
 
 	var newAddrs []net.IP
-	startIP := net.ParseIP(c.AddrPool[0]).To4()
-	endIP := net.ParseIP(c.AddrPool[1]).To4()
+	startIP := net.ParseIP(c.AddrPool[0])
+	endIP := net.ParseIP(c.AddrPool[1])
 
-	for ip := startIP; !ip.Equal(endIP) || len(newAddrs) < num; ip = database.IncrementIP(ip) {
-		if c.LeasesCache.ipCache[&ip] != nil { // Doesnt exist in leases
+	slog.Debug(startIP.String(), "Endf", endIP.String())
+
+	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) >= num; ip = database.IncrementIP(ip) {
+		_, ok := c.LeasesCache.ipCache[&ip]
+		if  !ok { // Doesnt exist in leases
+			slog.Debug("IP does not exist in leases cache, appending to new addrs", "ip", ip.String())
 			newAddrs = append(newAddrs, ip)
 		}
 	}

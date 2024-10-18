@@ -1,47 +1,47 @@
 package server
 
 import (
-	"os"
-	"net"
+	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
-	"database/sql"
+	"net"
+	"os"
 	"sync/atomic"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 
-	c "gdhcp/config"
-	dhcpUtils "gdhcp/dhcp"
-	deviceUtils "gdhcp/device"
-	options "gdhcp/options"
-	database "gdhcp/database"
 	cache "gdhcp/cache"
+	c "gdhcp/config"
+	database "gdhcp/database"
+	deviceUtils "gdhcp/device"
+	dhcpUtils "gdhcp/dhcp"
+	options "gdhcp/options"
 )
 
 var globServer atomic.Value
 
 type Server struct {
-	conn		*net.UDPConn
-	handle		*pcap.Handle
-	serverIP	net.IP
-	serverMAC	net.HardwareAddr
-	config		c.Config
-	optionsMap	map[layers.DHCPOpt]options.DHCPOptionValue
-	db			*sql.DB
-	cache		*cache.Cache
-	workerPool	chan struct{}
-	packetch 	chan packetJob
-	ipch		chan net.IP
-	sendch		chan []byte
-	quitch		chan struct{}
+	conn       *net.UDPConn
+	handle     *pcap.Handle
+	serverIP   net.IP
+	serverMAC  net.HardwareAddr
+	config     c.Config
+	optionsMap map[layers.DHCPOpt]options.DHCPOptionValue
+	db         *sql.DB
+	cache      *cache.Cache
+	workerPool chan struct{}
+	packetch   chan packetJob
+	ipch       chan net.IP
+	sendch     chan []byte
+	quitch     chan struct{}
 }
 
 type packetJob struct {
-    data        []byte
-    clientAddr  *net.UDPAddr
+	data       []byte
+	clientAddr *net.UDPAddr
 }
 
 func NewServer(config c.Config) (*Server, error) {
@@ -56,16 +56,18 @@ func NewServer(config c.Config) (*Server, error) {
 		slog.Error(fmt.Sprintf("Error occured while creating listen address struct, please review the interface configuration: %v\n", err))
 		os.Exit(1)
 	}
-	
+
 	// Listen on all IPs
-	listenAddr := net.UDPAddr{IP: net.IP{0, 0, 0, 0},  Port: 67}
+	listenAddr := net.UDPAddr{IP: net.IP{0, 0, 0, 0}, Port: 67}
 	conn, err := net.ListenUDP("udp", &listenAddr)
 	if err != nil {
-        return nil, fmt.Errorf("Error creating server UDP listener: %v\n", err)
-    }
+		return nil, fmt.Errorf("Error creating server UDP listener: %v\n", err)
+	}
+
+	handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
 
 	// Create handle for responding to requests later on
-	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
+	// handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
 		return nil, fmt.Errorf("Could not open pcap device: %w\n", err)
 	}
@@ -73,31 +75,33 @@ func NewServer(config c.Config) (*Server, error) {
 	optionsMap := options.CreateOptionMap(config)
 	numWorkers := config.Server.NumWorkers
 
-	db, err := database.ConnectDatabase()
-	if err != nil {
-		return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
-	}
+	// db, err := database.ConnectDatabase()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
+	// }
+	var db *sql.DB
 
 	// packetCache := cache.NewPacketCache(5, 15)
 	// addrQueue := cache.NewAddrQueue(30)
 
 	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool)
 	newCache.Init(20)
+	newCache.AddrQueue.PrintQueue()
 
 	return &Server{
-		conn:			conn,
-		handle:			handle,
-		serverIP:		serverIP.IP,
-		serverMAC:		iface.HardwareAddr,
-		config:			config,
-		optionsMap: 	optionsMap,
-		db:				db,
-		cache:			newCache,
-		workerPool:		make(chan struct{}, numWorkers),
-		packetch:		make(chan packetJob, 1000), // Can hold 1000 packets
-		ipch:			make(chan net.IP),
-		sendch:			make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
-		quitch:			make(chan struct{}),
+		conn:       conn,
+		handle:     handle,
+		serverIP:   serverIP.IP,
+		serverMAC:  iface.HardwareAddr,
+		config:     config,
+		optionsMap: optionsMap,
+		db:         db,
+		cache:      newCache,
+		workerPool: make(chan struct{}, numWorkers),
+		packetch:   make(chan packetJob, 1000), // Can hold 1000 packets
+		ipch:       make(chan net.IP),
+		sendch:     make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
+		quitch:     make(chan struct{}),
 	}, nil
 }
 
@@ -124,7 +128,7 @@ func (s *Server) Start() error {
 	close(s.packetch)
 	close(s.workerPool)
 	close(s.sendch)
-	
+
 	return nil
 }
 
@@ -137,7 +141,7 @@ func (s *Server) receivePackets() {
 				slog.Error(fmt.Sprintf("Error receiving packet: %v", err))
 				continue
 			}
-			
+
 			select {
 			case s.packetch <- packetJob{data: buffer[:n], clientAddr: clientAddr}:
 				// Packet added to queue
@@ -167,13 +171,14 @@ func (s *Server) sendPacket(packet []byte) error {
 }
 
 func (s *Server) worker() {
-    for job := range s.packetch {
-        s.workerPool <- struct{}{} 
-        err := s.handleDHCPPacket(job.data, job.clientAddr, s.config); if err != nil {
+	for job := range s.packetch {
+		s.workerPool <- struct{}{}
+		err := s.handleDHCPPacket(job.data, job.clientAddr, s.config)
+		if err != nil {
 			slog.Error(fmt.Sprintf("Error occured while handline dhcp packet: %v", err))
 		}
-		// Reads one item off the worker queue 
-        <-s.workerPool 
+		// Reads one item off the worker queue
+		<-s.workerPool
 	}
 }
 
@@ -187,19 +192,22 @@ func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, c
 	switch message, _ := dhcpUtils.GetMessageTypeOption(dhcpLayer.Options); message {
 	case layers.DHCPMsgTypeDiscover:
 		slog.Debug("Got Discover")
-		err := s.createOffer(dhcpLayer); if err != nil {
+		err := s.createOffer(dhcpLayer)
+		if err != nil {
 			return fmt.Errorf("Error creating offer: %v", err)
 		}
 	case layers.DHCPMsgTypeRequest:
 		slog.Debug("Got Request")
-		err := s.processRequest(dhcpLayer); if err != nil {
+		err := s.processRequest(dhcpLayer)
+		if err != nil {
 			return fmt.Errorf("Error processing request: %v", err)
 		}
 	case layers.DHCPMsgTypeOffer:
 		slog.Debug("Got Offer")
 	case layers.DHCPMsgTypeDecline:
 		slog.Debug("Got Decline")
-		err := s.processDecline(dhcpLayer); if err != nil {
+		err := s.processDecline(dhcpLayer)
+		if err != nil {
 			return fmt.Errorf("Error processing decline: %v", err)
 		}
 	case layers.DHCPMsgTypeAck:
@@ -217,8 +225,9 @@ func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, c
 	return nil
 }
 
-func (s *Server) GenerateIP(db *sql.DB,  config *c.Config) (net.IP, error) {
-	ips, err := database.GetLeasedIPs(db); if err != nil {
+func (s *Server) GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
+	ips, err := database.GetLeasedIPs(db)
+	if err != nil {
 		return nil, fmt.Errorf("Error getting leases from database: %v\n", err)
 	}
 
@@ -232,6 +241,6 @@ func (s *Server) GenerateIP(db *sql.DB,  config *c.Config) (net.IP, error) {
 			}
 		}
 	}
-	
+
 	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
-}	
+}

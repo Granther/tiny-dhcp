@@ -2,27 +2,27 @@ package cache
 
 import (
 	"fmt"
-	"gdhcp/database"
+	"log/slog"
 	"net"
 )
 
 type ListNode struct {
-	val		net.IP
-	prev	*ListNode
-	next	*ListNode
+	val  net.IP
+	prev *ListNode
+	next *ListNode
 }
 
 type AddrQueue struct {
-	space		int
-	left		*ListNode
-	right		*ListNode
+	space int
+	left  *ListNode
+	right *ListNode
 }
 
 func NewListNode(val net.IP, prev *ListNode, next *ListNode) *ListNode {
 	return &ListNode{
-		val:	val,
-		prev:	prev,
-		next: 	next,
+		val:  val,
+		prev: prev,
+		next: next,
 	}
 }
 
@@ -32,9 +32,9 @@ func NewAddrQueue(max int) *AddrQueue {
 	left.next = right
 
 	return &AddrQueue{
-		space:		max,
-		left: 		left,
-		right:		right,
+		space: max,
+		left:  left,
+		right: right,
 	}
 }
 
@@ -47,6 +47,8 @@ func (q *AddrQueue) isFull() bool {
 }
 
 func (q *AddrQueue) Empty() {
+	slog.Debug("Emptying queue...")
+
 	q.left.next = q.right
 	q.left.prev = q.right
 	q.right.prev = q.left
