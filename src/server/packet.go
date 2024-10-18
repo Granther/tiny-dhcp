@@ -186,7 +186,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 		return err
 	}
 
-	s.packetCache.Set(string(dhcpLayer.Xid), offerLayer)
+	s.cache.PacketCache.Set(string(dhcpLayer.Xid), offerLayer)
 	slog.Info("Offering Ip to client", "ip", offeredIP, "mac", clientMAC.String())
 	s.sendch <- (*packetPtr).Bytes()
 
@@ -217,7 +217,7 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 
 func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 
-	prevPacket := s.packetCache.Get(string(dhcpLayer.Xid))
+	prevPacket := s.cache.PacketCache.Get(string(dhcpLayer.Xid))
 
 	requestedIPOpt, requestedOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 	serverIdentOpt, serverIdOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptServerID)

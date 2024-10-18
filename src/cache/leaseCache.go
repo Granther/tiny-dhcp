@@ -13,7 +13,7 @@ import (
 type LeasesCache struct {
 	ipCache			map[*net.IP]*LeaseNode
 	macCache		map[*net.HardwareAddr]*LeaseNode
-	availableQueue	*CircularQueue
+	availableQueue	*AddrQueue
 }
 
 type LeaseNode struct {
@@ -35,7 +35,7 @@ func NewLeaseNode(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, lease
 func NewLeasesCache(max int) *LeasesCache {
 	ipCache := make(map[*net.IP]*LeaseNode)
 	macCache := make(map[*net.HardwareAddr]*LeaseNode)
-	availableQueue := NewCirularQueue(max)
+	availableQueue := NewAddrQueue(max)
 
 	return &LeasesCache {
 		ipCache: 		ipCache,

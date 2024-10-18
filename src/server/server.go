@@ -31,7 +31,7 @@ type Server struct {
 	config		c.Config
 	optionsMap	map[layers.DHCPOpt]options.DHCPOptionValue
 	db			*sql.DB
-	packetCache	*cache.PacketCache
+	cache		*cache.Cache
 	workerPool	chan struct{}
 	packetch 	chan packetJob
 	ipch		chan net.IP
@@ -78,7 +78,12 @@ func NewServer(config c.Config) (*Server, error) {
 		return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
 	}
 
-	packetCache := cache.NewPacketCache(5, 15)
+	// packetCache := cache.NewPacketCache(5, 15)
+	// addrQueue := cache.NewAddrQueue(30)
+
+	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool)
+	newCache.Init(20)
+
 	return &Server{
 		conn:			conn,
 		handle:			handle,
@@ -87,7 +92,7 @@ func NewServer(config c.Config) (*Server, error) {
 		config:			config,
 		optionsMap: 	optionsMap,
 		db:				db,
-		packetCache:	packetCache,
+		cache:			newCache,
 		workerPool:		make(chan struct{}, numWorkers),
 		packetch:		make(chan packetJob, 1000), // Can hold 1000 packets
 		ipch:			make(chan net.IP),
@@ -106,7 +111,7 @@ func (s *Server) Start() error {
 
 	go s.receivePackets()
 	go s.sendPackets()
-	go s.packetCache.CleanJob(15)
+	go s.cache.PacketCache.CleanJob(15)
 
 	slog.Info("Server is now listening for packets/quitch")
 
