@@ -98,9 +98,25 @@ func (c *Cache) FillQueue(num int) error {
 	return nil
 }
 
-func (c *Cache) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration) error {
-	newNode := NewLeaseNode(ip, mac, leaseLen, time.Now())
+func (c *Cache) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error {
+	leaseLenDur := time.Duration(leaseLen) * time.Second
+	newNode := NewLeaseNode(ip, mac, leaseLenDur, time.Now())
 	c.LeasesCache.Put(newNode)
 
+	database.LeaseIP(c.LeasesCache.db, newNode.ip, newNode.mac, newNode.leaseLen, newNode.leasedOn)
+
 	return nil
+}
+
+func (c *Cache) IsIPAvailable(ip net.IP) bool {
+	return c.LeasesCache.IPGet(ip) == nil
+}
+
+func (c *Cache) IsMACLeased(mac net.HardwareAddr) net.IP {
+	node := c.LeasesCache.MACGet(mac) 
+	if node == nil {
+		return nil
+	}
+
+	return node.ip
 }

@@ -1,17 +1,18 @@
 package server
 
 import (
-	"net"
 	"fmt"
 	"log/slog"
+	"net"
+
 	// "slices"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 
-	dhcpUtils "gdhcp/dhcp"
 	database "gdhcp/database"
+	dhcpUtils "gdhcp/dhcp"
 )
 
 // Fixes mac addr to be correct size if sent as locally administered, returns true if LA'd
@@ -34,7 +35,8 @@ func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
 		return nil, fmt.Errorf("Unable to get client mac from dhcp layer")
 	}
 
-	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data)); if err != nil {
+	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data))
+	if err != nil {
 		return nil, fmt.Errorf("Error processing mac to usable form: %v", err)
 	}
 
@@ -44,13 +46,14 @@ func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
 func (s *Server) createNack(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
 
-
-	nackLayer, err := s.constructNackLayer(dhcpLayer); if err != nil {
+	nackLayer, err := s.constructNackLayer(dhcpLayer)
+	if err != nil {
 		return err
 	}
 
 	broadcastAddr := net.IP{255, 255, 255, 255}
-	packetPtr, err := s.buildStdPacket(broadcastAddr, clientMAC, nackLayer); if err != nil {
+	packetPtr, err := s.buildStdPacket(broadcastAddr, clientMAC, nackLayer)
+	if err != nil {
 		return err
 	}
 	packetBuf := *packetPtr
@@ -58,7 +61,7 @@ func (s *Server) createNack(dhcpLayer *layers.DHCPv4) error {
 	slog.Info("Sending nak to client mac: %v", clientMAC.String())
 	s.sendch <- packetBuf.Bytes()
 
-	return nil 
+	return nil
 }
 
 func (s *Server) constructNackLayer(requestDhcpLayer *layers.DHCPv4) (*layers.DHCPv4, error) {
@@ -72,13 +75,13 @@ func (s *Server) constructNackLayer(requestDhcpLayer *layers.DHCPv4) (*layers.DH
 		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
 		HardwareType: layers.LinkTypeEthernet,
 		HardwareLen:  requestDhcpLayer.HardwareLen,
-		HardwareOpts: requestDhcpLayer.HardwareOpts, 
-		Flags:		  flags,
-		Xid:          requestDhcpLayer.Xid, 
-		Secs:         requestDhcpLayer.Secs, 
+		HardwareOpts: requestDhcpLayer.HardwareOpts,
+		Flags:        flags,
+		Xid:          requestDhcpLayer.Xid,
+		Secs:         requestDhcpLayer.Secs,
 		YourClientIP: net.IP{0, 0, 0, 0},
 		ClientHWAddr: requestDhcpLayer.ClientHWAddr,
-		Options:     dhcpOptions,
+		Options:      dhcpOptions,
 	}
 
 	return dhcpLayer, nil
@@ -92,10 +95,10 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 	}
 
 	dhcpOptions := layers.DHCPOptions{}
-	
+
 	msgTypeOption := layers.NewDHCPOption(layers.DHCPOptMessageType, []byte{byte(msgType)})
 	dhcpOptions = append(dhcpOptions, msgTypeOption)
-	// Iterate over Request List, get option requested 
+	// Iterate over Request List, get option requested
 	for _, req := range requestList.Data {
 		if s.optionsMap[layers.DHCPOpt(req)] == nil {
 			continue
@@ -105,7 +108,7 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 			continue
 		}
 
-		op := layers.NewDHCPOption(layers.DHCPOpt(req), r) 
+		op := layers.NewDHCPOption(layers.DHCPOpt(req), r)
 		dhcpOptions = append(dhcpOptions, op)
 	}
 
@@ -113,7 +116,7 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
-	dhcpOptions	= append(dhcpOptions, dhcpLeaseTime)
+	dhcpOptions = append(dhcpOptions, dhcpLeaseTime)
 	dhcpOptions = append(dhcpOptions, dhcpServerIP)
 	dhcpOptions = append(dhcpOptions, endOptions)
 
@@ -125,17 +128,17 @@ func (s *Server) buildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer
 	var layersToSerialize []gopacket.SerializableLayer
 
 	ethernetLayer := &layers.Ethernet{
-		SrcMAC: s.serverMAC,
-		DstMAC: dstMAC, 
+		SrcMAC:       s.serverMAC,
+		DstMAC:       dstMAC,
 		EthernetType: layers.EthernetTypeIPv4,
 	}
 	layersToSerialize = append(layersToSerialize, ethernetLayer)
 
 	ipLayer := &layers.IPv4{
-		Version: 4,
-		TTL: 64,
-		SrcIP: s.serverIP, // We always respond on the DHCP ip
-		DstIP: dstIP, // We set the Dest to that of the offered IP
+		Version:  4,
+		TTL:      64,
+		SrcIP:    s.serverIP, // We always respond on the DHCP ip
+		DstIP:    dstIP,      // We set the Dest to that of the offered IP
 		Protocol: layers.IPProtocolUDP,
 	}
 	layersToSerialize = append(layersToSerialize, ipLayer)
@@ -190,7 +193,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	slog.Info("Offering Ip to client", "ip", offeredIP, "mac", clientMAC.String())
 	s.sendch <- (*packetPtr).Bytes()
 
-	return nil 
+	return nil
 }
 
 func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
@@ -203,13 +206,13 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
 		HardwareType: layers.LinkTypeEthernet,
 		HardwareLen:  discoverLayer.HardwareLen,
-		HardwareOpts: discoverLayer.HardwareOpts, 
-		Xid:          discoverLayer.Xid, // Need this from discover
+		HardwareOpts: discoverLayer.HardwareOpts,
+		Xid:          discoverLayer.Xid,  // Need this from discover
 		Secs:         discoverLayer.Secs, // Make this up for now
-		Flags:		  discoverLayer.Flags,
+		Flags:        discoverLayer.Flags,
 		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
 		ClientHWAddr: discoverLayer.ClientHWAddr,
-		Options:     *dhcpOptions,
+		Options:      *dhcpOptions,
 	}
 
 	return dhcpLayer, nil
@@ -234,7 +237,7 @@ func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 		return "none", nil
 	}
 
-	return "none", nil 
+	return "none", nil
 }
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
@@ -275,22 +278,30 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	// IsIPAvailable
 	// lease ip
 	// is mac leases
-	// 
+	//
+
+	// We dont know what to do
+	// If i check inf an ip is available, should I do an arp every time?
+	// init
+	// When generating we have to arp, so dont do it again
+	// When initing, we shouldnt have unleases ip even if expired
+	// Arp should only happen when generating
 
 	clientMAC := dhcpLayer.ClientHWAddr
 	var requestedIP net.IP
 
 	if requestType == "selecting" {
 		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-		if ok && database.IsIPAvailable(s.db, requestedIPOpt.Data) {
+		if ok && s.cache.IsIPAvailable(requestedIPOpt.Data) {
 			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
-			err := database.LeaseIP(s.db, requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
-				return fmt.Errorf("Unable to create lease for requested IP: %w\n", err)
+			err := s.cache.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
+			if err != nil {
+				return fmt.Errorf("unable to create lease for requested ip: %w", err)
 			}
 			requestedIP = requestedIPOpt.Data
 		}
 	} else if requestType == "init" {
-		oldIP := database.IsMACLeased(s.db, clientMAC)
+		oldIP := s.cache.IsMACLeased(clientMAC)
 		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 		if oldIP != nil && ok {
 			if oldIP.Equal(requestedIPOpt.Data) {
@@ -299,12 +310,13 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 			}
 		} else {
 			slog.Debug("Requested IP is not available, sending Nack")
-			err := s.createNack(dhcpLayer); if err != nil {
-				return fmt.Errorf("Error sending nack in response to request")
+			err := s.createNack(dhcpLayer)
+			if err != nil {
+				return fmt.Errorf("error sending nack in response to request")
 			}
 		}
 	} else if requestType == "renewing" {
-		currentIP := database.IsMACLeased(s.db, clientMAC)
+		currentIP := s.cache.IsMACLeased(clientMAC)
 		fmt.Println(currentIP.String())
 		// if currentIP != nil {
 		// 	if dhcpLayer.ClientIP.Equal(currentIP) {
@@ -313,7 +325,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 		// 	// Renew the ip lease
 		// 	err := database.LeaseIP(s.db, requestedIP, clientMAC, s.config.DHCP.LeaseLen); if err != nil {
 		// 		return fmt.Errorf("Unable to renew lease for requested IP: %w\n", err)
-		// 	}			
+		// 	}
 		// }
 
 		requestedIP = currentIP
@@ -332,7 +344,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	slog.Info(fmt.Sprintf("Acking to Ip: %v", requestedIP.String()))
 	s.sendch <- packetBuf.Bytes()
 
-	return nil 
+	return nil
 }
 
 func (s *Server) constructAckLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
@@ -347,13 +359,13 @@ func (s *Server) constructAckLayer(requestLayer *layers.DHCPv4, offeredIP net.IP
 		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
 		HardwareType: layers.LinkTypeEthernet,
 		HardwareLen:  requestLayer.HardwareLen,
-		HardwareOpts: requestLayer.HardwareOpts, 
-		Xid:          requestLayer.Xid, // Need this from discover
+		HardwareOpts: requestLayer.HardwareOpts,
+		Xid:          requestLayer.Xid,  // Need this from discover
 		Secs:         requestLayer.Secs, // Make this up for now
-		Flags:		  requestLayer.Flags,
+		Flags:        requestLayer.Flags,
 		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
 		ClientHWAddr: requestLayer.ClientHWAddr,
-		Options:     *dhcpOptions,
+		Options:      *dhcpOptions,
 	}
 
 	return dhcpLayer, nil
@@ -381,13 +393,13 @@ func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net
 		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
 		HardwareType: layers.LinkTypeEthernet,
 		HardwareLen:  requestLayer.HardwareLen,
-		HardwareOpts: requestLayer.HardwareOpts, 
-		Xid:          requestLayer.Xid, // Need this from discover
+		HardwareOpts: requestLayer.HardwareOpts,
+		Xid:          requestLayer.Xid,  // Need this from discover
 		Secs:         requestLayer.Secs, // Make this up for now
-		Flags:		  requestLayer.Flags,
+		Flags:        requestLayer.Flags,
 		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
 		ClientHWAddr: requestLayer.ClientHWAddr,
-		Options:     *dhcpOptions,
+		Options:      *dhcpOptions,
 	}
 
 	return dhcpLayer, nil
@@ -401,12 +413,12 @@ func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) {
 	}
 
 	arpLayer := &layers.ARP{
-		AddrType:		   layers.LinkTypeEthernet,
-		Protocol:		   layers.EthernetTypeIPv4,
+		AddrType:          layers.LinkTypeEthernet,
+		Protocol:          layers.EthernetTypeIPv4,
 		Operation:         layers.ARPRequest,
 		SourceHwAddress:   srcMAC,
 		SourceProtAddress: srcIP.To4(),
-		DstHwAddress:      []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // Unknown 
+		DstHwAddress:      []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // Unknown
 		DstProtAddress:    dstIP.To4(),
 		HwAddressSize:     6,
 		ProtAddressSize:   4,
@@ -457,7 +469,6 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
 		}
 	}
 }
-
 
 // Where we left off
 // Upon wanting ip

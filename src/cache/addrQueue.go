@@ -13,9 +13,10 @@ type ListNode struct {
 }
 
 type AddrQueue struct {
-	space int
-	left  *ListNode
-	right *ListNode
+	space 	int
+	// addMap	map[[16]byte]*ListNode
+	left  	*ListNode
+	right 	*ListNode
 }
 
 func NewListNode(val net.IP, prev *ListNode, next *ListNode) *ListNode {

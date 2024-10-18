@@ -3,7 +3,6 @@ package cache
 import (
 	"database/sql"
 	"fmt"
-	database "gdhcp/database"
 	"net"
 	"time"
 )
@@ -14,9 +13,9 @@ import (
 // If queue is empty, add additionalt pool of N available addrs (if possible)
 
 type LeasesCache struct {
-	db             *sql.DB
-	ipCache        map[[16]byte]*LeaseNode
-	macCache       map[string]*LeaseNode
+	db       *sql.DB
+	ipCache  map[[16]byte]*LeaseNode
+	macCache map[string]*LeaseNode
 }
 
 type LeaseNode struct {
@@ -40,9 +39,9 @@ func NewLeasesCache(db *sql.DB, max int) *LeasesCache {
 	macCache := make(map[string]*LeaseNode)
 
 	return &LeasesCache{
-		db:             db,
-		ipCache:        ipCache,
-		macCache:       macCache,
+		db:       db,
+		ipCache:  ipCache,
+		macCache: macCache,
 	}
 }
 
@@ -50,8 +49,6 @@ func (l *LeasesCache) Put(newNode *LeaseNode) {
 	ip := IpTo16(newNode.ip)
 	l.ipCache[*ip] = newNode
 	l.macCache[newNode.mac.String()] = newNode
-
-	database.LeaseIP(l.db, newNode.ip, newNode.mac, newNode.leaseLen, newNode.leasedOn)
 }
 
 func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
