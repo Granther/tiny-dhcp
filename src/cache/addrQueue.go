@@ -1,4 +1,4 @@
-package queue
+package cache
 
 import (
 	"fmt"
@@ -27,8 +27,8 @@ func NewListNode(val net.IP, prev *ListNode, next *ListNode) *ListNode {
 
 func NewCirularQueue(max int) *CircularQueue {
 	// Doubley linked, 2 dummy nodes linked to eachother
-	left := NewListNode(0, nil, nil)
-	right := NewListNode(0, left, nil)
+	left := NewListNode(nil, nil, nil)
+	right := NewListNode(nil, left, nil)
 	left.next = right
 
 	return &CircularQueue{
@@ -48,14 +48,14 @@ func (q *CircularQueue) isFull() bool {
 
 func (q *CircularQueue) Front() net.IP {
 	if q.isEmpty() {
-		return -1
+		return nil
 	}
 	return q.left.next.val
 }
 
 func (q *CircularQueue) Rear() net.IP {
 	if q.isEmpty() {
-		return -1
+		return nil
 	}
 	return q.right.prev.val
 }

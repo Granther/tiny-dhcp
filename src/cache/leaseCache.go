@@ -1,7 +1,6 @@
 package cache 
 
 import (
-	"fmt"
 	"time"
 	"net"
 )
@@ -12,8 +11,8 @@ import (
 // If queue is empty, add additionalt pool of N available addrs (if possible)
 
 type LeasesCache struct {
-	ipCache			map[net.IP]*LeaseNode
-	macCache		map[net.HardwareAddr]*LeaseNode
+	ipCache			map[*net.IP]*LeaseNode
+	macCache		map[*net.HardwareAddr]*LeaseNode
 	availableQueue	*CircularQueue
 }
 
@@ -34,8 +33,8 @@ func NewLeaseNode(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, lease
 }
 
 func NewLeasesCache(max int) *LeasesCache {
-	ipCache := make(map[net.IP]*LeaseNode)
-	macCache := make(map[net.IP]*LeaseNode)
+	ipCache := make(map[*net.IP]*LeaseNode)
+	macCache := make(map[*net.HardwareAddr]*LeaseNode)
 	availableQueue := NewCirularQueue(max)
 
 	return &LeasesCache {
