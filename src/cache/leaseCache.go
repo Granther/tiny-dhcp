@@ -77,6 +77,16 @@ func (l *LeasesCache) MACRemove(mac net.HardwareAddr) {
 	delete(l.macCache, mac.String())
 }
 
+func (l *LeasesCache) LeaseExpired(ip net.IP) bool {
+	val := l.IPGet(ip)
+	if val == nil {
+		return true
+	}
+
+	timeSince := time.Since(val.leasedOn)
+	return timeSince >= val.leaseLen
+}
+
 func (l *LeasesCache) PrintCache() {
 	for _, val := range l.ipCache {
 		fmt.Printf("IP: %v, MAC: %v\n", val.ip.String(), val.mac.String())

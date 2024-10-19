@@ -82,18 +82,6 @@ func (q *AddrQueue) enQueue(val net.IP) bool {
 	return true
 }
 
-func (q *AddrQueue) postQueue(ip net.IP) bool {
-	if q.isFull() {
-		return false
-	}
-
-	newNode := NewListNode(ip, nil, nil)
-	q.nodeEnd(newNode)
-	q.space -= 1
-
-	return true
-}
-
 func (q *AddrQueue) nodeEnd(node *ListNode) {
 	// Fix left
 	q.left.next = node.next

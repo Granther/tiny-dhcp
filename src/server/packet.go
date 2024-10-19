@@ -303,19 +303,30 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	} else if requestType == "init" {
 		oldIP := s.cache.IsMACLeased(clientMAC)
 		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+		
+		slog.Debug("Request Init", "OldIP", oldIP.String(), "Reqip", net.IP(requestedIPOpt.Data).String())
+
 		if oldIP != nil && ok {
-			if oldIP.Equal(requestedIPOpt.Data) {
+			if oldIP.Equal(net.IP(requestedIPOpt.Data)) {
 				slog.Debug("Mac is assigned to requested ip")
 				requestedIP = oldIP
+			} else {
+				slog.Debug("oldIP does not equal requested ip", "requestedIP", requestedIP.String())
+				goto NACK
 			}
 		} else {
+			slog.Debug("Requested IP is not available, sending Nack")
+			goto NACK
+		}
+
+		NACK:
 			slog.Debug("Requested IP is not available, sending Nack")
 			err := s.createNack(dhcpLayer)
 			if err != nil {
 				return fmt.Errorf("error sending nack in response to request")
 			}
 			return nil
-		}
+
 	} else if requestType == "renewing" {
 		currentIP := s.cache.IsMACLeased(clientMAC)
 		if currentIP != nil {
