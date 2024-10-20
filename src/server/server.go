@@ -162,7 +162,7 @@ func (s *Server) sendPackets() {
 
 func (s *Server) sendPacket(packet []byte) error {
 	if err := s.handle.WritePacketData(packet); err != nil {
-		return fmt.Errorf("Failed to send packet: %w", err)
+		return fmt.Errorf("failed to send packet: %w", err)
 	}
 	return nil
 }
@@ -170,7 +170,7 @@ func (s *Server) sendPacket(packet []byte) error {
 func (s *Server) worker() {
 	for job := range s.packetch {
 		s.workerPool <- struct{}{}
-		err := s.handleDHCPPacket(job.data, job.clientAddr, s.config)
+		err := s.handleDHCPPacket(job.data)
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error occured while handline dhcp packet: %v", err))
 		}
@@ -180,10 +180,10 @@ func (s *Server) worker() {
 }
 
 // Function to handle a DHCP packet in a new goroutine
-func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, config c.Config) error {
+func (s *Server) handleDHCPPacket(packetSlice []byte) error {
 	dhcpLayer, ok := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
 	if !ok {
-		return fmt.Errorf("Error getting dhcp layer from packet")
+		return fmt.Errorf("error getting dhcp layer from packet")
 	}
 
 	switch message, _ := dhcpUtils.GetMessageTypeOption(dhcpLayer.Options); message {
@@ -191,30 +191,34 @@ func (s *Server) handleDHCPPacket(packetSlice []byte, clientAddr *net.UDPAddr, c
 		slog.Debug("Got Discover")
 		err := s.createOffer(dhcpLayer)
 		if err != nil {
-			return fmt.Errorf("Error creating offer: %v", err)
+			return fmt.Errorf("error creating offer: %v", err)
 		}
 	case layers.DHCPMsgTypeRequest:
 		slog.Debug("Got Request")
 		err := s.processRequest(dhcpLayer)
 		if err != nil {
-			return fmt.Errorf("Error processing request: %v", err)
+			return fmt.Errorf("error processing request: %v", err)
 		}
-	case layers.DHCPMsgTypeOffer:
-		slog.Debug("Got Offer")
 	case layers.DHCPMsgTypeDecline:
 		slog.Debug("Got Decline")
 		err := s.processDecline(dhcpLayer)
 		if err != nil {
-			return fmt.Errorf("Error processing decline: %v", err)
+			return fmt.Errorf("error processing decline: %v", err)
 		}
+	case layers.DHCPMsgTypeInform:
+		slog.Debug("Got Inform")
+		err := s.processInform(dhcpLayer)
+		if err != nil {
+			return fmt.Errorf("error processing inform: %v", err)
+		}
+	case layers.DHCPMsgTypeOffer:
+		slog.Debug("Got Offer")
 	case layers.DHCPMsgTypeAck:
 		log.Printf("Got Ack")
 	case layers.DHCPMsgTypeNak:
 		log.Printf("Got Nak")
 	case layers.DHCPMsgTypeRelease:
 		log.Printf("Got Release")
-	case layers.DHCPMsgTypeInform:
-		log.Printf("Got Inform")
 	case layers.DHCPMsgTypeUnspecified:
 		log.Printf("Error, DHCP operation type is unspecified")
 	}

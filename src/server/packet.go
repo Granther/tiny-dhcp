@@ -233,10 +233,10 @@ func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 	} else if !serverIdOpOk && !requestedOpOk && !dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
 		return "renewing", nil
 	} else {
-		slog.Debug("Reached none request type", "serverIdOptOk", serverIdOpOk, "requestedOpOk", requestedOpOk, "dhcpLayer.ClientIP", dhcpLayer.ClientIP.String())
 		return "none", nil
 	}
 
+	slog.Debug("Reached none request type", "serverIdOptOk", serverIdOpOk, "requestedOpOk", requestedOpOk, "dhcpLayer.ClientIP", dhcpLayer.ClientIP.String())
 	return "none", nil
 }
 
@@ -402,7 +402,29 @@ func (s *Server) processDecline(dhcpLayer *layers.DHCPv4) error {
 }
 
 func (s *Server) processInform(dhcpLayer *layers.DHCPv4) error {
-	// err := s.
+	clientMAC := dhcpLayer.ClientHWAddr
+	if clientMAC == nil {
+		return fmt.Errorf("client mac nil in dhcp inform")
+	}
+
+	clientIP := dhcpLayer.ClientIP
+	if clientIP == nil {
+		return fmt.Errorf("client ip nil in dhcp inform")
+	}
+
+	ackLayer, err := s.constructAckLayer(dhcpLayer, clientIP)
+	if err != nil {
+		return err
+	}
+	packetPtr, err := s.buildStdPacket(clientIP, clientMAC, ackLayer)
+	if err != nil {
+		return err
+	}
+	packetBuf := *packetPtr
+
+	slog.Info(fmt.Sprintf("Acking inform to Ip: %v", clientIP.String()))
+	s.sendch <- packetBuf.Bytes()
+
 	return nil
 }
 
@@ -494,14 +516,5 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
 		}
 	}
 }
-
-// Where we left off
-// Upon wanting ip
-// Search through all a vailable IPs to check if they have static clients
-// When checking. open new gorout
-// Have one channel that will end all children when set
-// This channel represents the first IP a goroutine finfs is completely available
-// Should I really do a worker pool?
-// Maybe I make the buffer half the size of the worker pool so I dont hog all workers
 
 // HYPE HYPE HYPE DONT BE LAZY

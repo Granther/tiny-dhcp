@@ -81,31 +81,18 @@ func (c *Cache) FillQueue(num int) error {
 	c.AddrQueue.Empty()
 
 	var newAddrs []net.IP
-	var expAddrs []net.IP
 	startIP := net.ParseIP(c.AddrPool[0])
 	endIP := net.ParseIP(c.AddrPool[1])
 
 	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < num; ip = database.IncrementIP(ip) {
 		val := c.LeasesCache.IPGet(ip)
 		if val == nil { // Doesnt exist in leases
-			if c.LeasesCache.LeaseExpired(ip) {
-				expAddrs = append(expAddrs, ip)
-			} else {
-				newAddrs = append(newAddrs, ip)
-			}
+			newAddrs = append(newAddrs, ip)
 		}
 	}
 
 	// Add new addrs first (first to be picked)
 	for _, ip := range newAddrs {
-		ok := c.AddrQueue.enQueue(ip)
-		if !ok {
-			slog.Debug("Wasn't able to add all addrs to queue, maybe full")
-		}
-	}
-
-	// Add expired addrs to be used later (if client comes back)
-	for _, ip := range expAddrs {
 		ok := c.AddrQueue.enQueue(ip)
 		if !ok {
 			slog.Debug("Wasn't able to add all addrs to queue, maybe full")
