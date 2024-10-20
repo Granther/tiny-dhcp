@@ -428,6 +428,10 @@ func (s *Server) processInform(dhcpLayer *layers.DHCPv4) error {
 	return nil
 }
 
+func (s *Server) processRelease(dhcpLayer *layers.DHCPv4) error {
+	
+}
+
 func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
 	dhcpOptions, ok := s.readRequestList(requestLayer, layers.DHCPMsgTypeInform)
 	if !ok {

@@ -44,13 +44,13 @@ type packetJob struct {
 func NewServer(config c.Config) (*Server, error) {
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Failed to get interface: %v", err))
+		slog.Error(fmt.Sprintf("failed to get interface: %v", err))
 		os.Exit(1)
 	}
 
 	serverIP, err := deviceUtils.GetUDPAddr(iface)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Error occured while creating listen address struct, please review the interface configuration: %v\n", err))
+		slog.Error(fmt.Sprintf("error occured while creating listen address struct, please review the interface configuration: %v", err))
 		os.Exit(1)
 	}
 
@@ -58,7 +58,7 @@ func NewServer(config c.Config) (*Server, error) {
 	listenAddr := net.UDPAddr{IP: net.IP{0, 0, 0, 0}, Port: 67}
 	conn, err := net.ListenUDP("udp", &listenAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Error creating server UDP listener: %v\n", err)
+		return nil, fmt.Errorf("error creating server UDP listener: %v", err)
 	}
 
 	// handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
@@ -66,7 +66,7 @@ func NewServer(config c.Config) (*Server, error) {
 	// Create handle for responding to requests later on
 	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
 	if err != nil {
-		return nil, fmt.Errorf("Could not open pcap device: %w\n", err)
+		return nil, fmt.Errorf("could not open pcap device: %w", err)
 	}
 
 	optionsMap := options.CreateOptionMap(config)
@@ -74,14 +74,14 @@ func NewServer(config c.Config) (*Server, error) {
 
 	db, err := database.ConnectDatabase()
 	if err != nil {
-		return nil, fmt.Errorf("Error occured when connecting to db object: %v\n", err)
+		return nil, fmt.Errorf("error occured when connecting to db object: %v", err)
 	}
 
 	// packetCache := cache.NewPacketCache(5, 15)
 	// addrQueue := cache.NewAddrQueue(30)
 
 	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool, db)
-	err = newCache.Init(db, 20)
+	newCache.Init(db, 20)
 	newCache.AddrQueue.PrintQueue()
 	newCache.LeasesCache.PrintCache()
 
@@ -211,14 +211,18 @@ func (s *Server) handleDHCPPacket(packetSlice []byte) error {
 		if err != nil {
 			return fmt.Errorf("error processing inform: %v", err)
 		}
+	case layers.DHCPMsgTypeRelease:
+		slog.Debug("Got Release")
+		err := s.processRelease(dhcpLayer)
+		if err != nil {
+			return fmt.Errorf("error processing release: %v", err)
+		}
 	case layers.DHCPMsgTypeOffer:
 		slog.Debug("Got Offer")
 	case layers.DHCPMsgTypeAck:
 		log.Printf("Got Ack")
 	case layers.DHCPMsgTypeNak:
 		log.Printf("Got Nak")
-	case layers.DHCPMsgTypeRelease:
-		log.Printf("Got Release")
 	case layers.DHCPMsgTypeUnspecified:
 		log.Printf("Error, DHCP operation type is unspecified")
 	}
@@ -229,7 +233,7 @@ func (s *Server) handleDHCPPacket(packetSlice []byte) error {
 func (s *Server) GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 	ips, err := database.GetLeasedIPs(db)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting leases from database: %v\n", err)
+		return nil, fmt.Errorf("error getting leases from database: %v", err)
 	}
 
 	startIP := net.ParseIP(config.DHCP.AddrPool[0])
@@ -243,5 +247,5 @@ func (s *Server) GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("Unable to generate IP addr, pool full?")
+	return nil, fmt.Errorf("unable to generate ip addr, pool full?")
 }

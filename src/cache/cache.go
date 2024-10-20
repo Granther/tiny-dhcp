@@ -113,6 +113,11 @@ func (c *Cache) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error {
 }
 
 func (c *Cache) Unlease(node *LeaseNode) {
+	c.UnleaseDB(node)
+	c.LeasesCache.IPRemove(node.ip)
+}
+
+func (c *Cache) UnleaseDB(node *LeaseNode) error {
 	dbLease := &types.DatabaseLease{
 		IP:       node.ip.String(),
 		MAC:      node.mac.String(),
@@ -120,7 +125,10 @@ func (c *Cache) Unlease(node *LeaseNode) {
 		LeaseLen: int(node.leaseLen.Seconds()),
 	}
 
+	// Should sync, what if SQL fails
 	database.Unlease(c.LeasesCache.db, dbLease)
+
+	return nil
 }
 
 func (c *Cache) UnleaseIP(ip net.IP) {
