@@ -431,8 +431,19 @@ func (s *Server) processInform(dhcpLayer *layers.DHCPv4) error {
 	return nil
 }
 
+// Attempts to release by MAC, then tries by IP
 func (s *Server) processRelease(dhcpLayer *layers.DHCPv4) error {
-	return nil
+	clientMAC := dhcpLayer.ClientHWAddr
+	if clientMAC != nil {
+		s.cache.UnleaseMAC(clientMAC)
+		return nil 
+	}
+
+	clientIP := dhcpLayer.ClientIP
+	if clientIP != nil {
+		s.cache.UnleaseIP(clientIP)
+		return nil
+	}
 }
 
 func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
