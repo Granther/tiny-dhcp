@@ -19,7 +19,7 @@ type Cache struct {
 }
 
 func NewCache(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string, db *sql.DB) *Cache {
-	slog.Debug("Creating new generat cache, and all children")
+	slog.Debug("Creating new generate cache, and all children")
 
 	return &Cache{
 		AddrPool:    addrPool,

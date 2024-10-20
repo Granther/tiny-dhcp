@@ -231,21 +231,23 @@ func (s *Server) handleDHCPPacket(packetSlice []byte) error {
 }
 
 func (s *Server) GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
-	ips, err := database.GetLeasedIPs(db)
-	if err != nil {
-		return nil, fmt.Errorf("error getting leases from database: %v", err)
-	}
+	// ips, err := database.GetLeasedIPs(db)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error getting leases from database: %v", err)
+	// }
 
-	startIP := net.ParseIP(config.DHCP.AddrPool[0])
-	endIP := net.ParseIP(config.DHCP.AddrPool[1])
+	// startIP := net.ParseIP(config.DHCP.AddrPool[0])
+	// endIP := net.ParseIP(config.DHCP.AddrPool[1])
 
-	for ip := startIP; !database.IsIPEqual(ip, endIP); ip = database.IncrementIP(ip) {
-		if !database.IPsContains(ips, ip) {
-			if !s.IsOccupiedStatic(ip) {
-				return ip, nil
-			}
-		}
-	}
+	// for ip := startIP; !database.IsIPEqual(ip, endIP); ip = database.IncrementIP(ip) {
+	// 	if !database.IPsContains(ips, ip) {
+	// 		if !s.IsOccupiedStatic(ip) {
+	// 			return ip, nil
+	// 		}
+	// 	}
+	// }
+
+	ip := s.cache.AddrQueue.Front()
 
 	return nil, fmt.Errorf("unable to generate ip addr, pool full?")
 }
