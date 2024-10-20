@@ -202,6 +202,9 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 		slog.Warn("Request list does not exist in Discover")
 	}
 
+	// Set flags to unicast, always talk to one host
+	var flags uint16 = 0x0000
+
 	dhcpLayer := &layers.DHCPv4{
 		Operation:    layers.DHCPOpReply, // Type of Bootp reply, always reply when coming from server
 		HardwareType: layers.LinkTypeEthernet,
@@ -209,7 +212,7 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 		HardwareOpts: discoverLayer.HardwareOpts,
 		Xid:          discoverLayer.Xid,  // Need this from discover
 		Secs:         discoverLayer.Secs, // Make this up for now
-		Flags:        discoverLayer.Flags,
+		Flags:        flags,
 		YourClientIP: offeredIP, // Your IP is what is offered, what is 'yours'
 		ClientHWAddr: discoverLayer.ClientHWAddr,
 		Options:      *dhcpOptions,
@@ -288,7 +291,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	// Arp should only happen when generating
 
 	clientMAC := dhcpLayer.ClientHWAddr
-	requestedIP := net.IP{0, 0, 0, 0} 
+	requestedIP := net.IP{0, 0, 0, 0}
 
 	if requestType == "selecting" {
 		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
@@ -303,7 +306,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	} else if requestType == "init" {
 		oldIP := s.cache.IsMACLeased(clientMAC)
 		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-		
+
 		slog.Debug("Request Init", "OldIP", oldIP.String(), "Reqip", net.IP(requestedIPOpt.Data).String())
 
 		if oldIP != nil && ok {
@@ -319,19 +322,19 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 			goto NACK
 		}
 
-		NACK:
-			slog.Debug("Requested IP is not available, sending Nack")
-			err := s.createNack(dhcpLayer)
-			if err != nil {
-				return fmt.Errorf("error sending nack in response to request")
-			}
-			return nil
+	NACK:
+		slog.Debug("Requested IP is not available, sending Nack")
+		err := s.createNack(dhcpLayer)
+		if err != nil {
+			return fmt.Errorf("error sending nack in response to request")
+		}
+		return nil
 
 	} else if requestType == "renewing" {
 		currentIP := s.cache.IsMACLeased(clientMAC)
 		if currentIP != nil {
 			// if dhcpLayer.ClientIP.Equal(currentIP) {
-				// slog.Debug("Mac is assigned to current ip, renewing")
+			// slog.Debug("Mac is assigned to current ip, renewing")
 			// Renew the ip lease
 			slog.Debug("CurrentIP isnt nil, renewing...")
 			err := s.cache.LeaseIP(requestedIP, clientMAC, s.config.DHCP.LeaseLen)
@@ -429,7 +432,7 @@ func (s *Server) processInform(dhcpLayer *layers.DHCPv4) error {
 }
 
 func (s *Server) processRelease(dhcpLayer *layers.DHCPv4) error {
-	
+	return nil
 }
 
 func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
