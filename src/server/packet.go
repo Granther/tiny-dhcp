@@ -302,6 +302,8 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 				return fmt.Errorf("unable to create lease for requested ip: %w", err)
 			}
 			requestedIP = requestedIPOpt.Data
+		} else {
+			goto NACK
 		}
 	} else if requestType == "init" {
 		oldIP := s.cache.IsMACLeased(clientMAC)
@@ -321,15 +323,6 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 			slog.Debug("Requested IP is not available, sending Nack")
 			goto NACK
 		}
-
-	NACK:
-		slog.Debug("Requested IP is not available, sending Nack")
-		err := s.createNack(dhcpLayer)
-		if err != nil {
-			return fmt.Errorf("error sending nack in response to request")
-		}
-		return nil
-
 	} else if requestType == "renewing" {
 		currentIP := s.cache.IsMACLeased(clientMAC)
 		if currentIP != nil {
@@ -354,6 +347,14 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 		slog.Warn("Request type did not fit, dropping packet")
 		return nil
 	}
+
+	NACK:
+		slog.Debug("Requested IP is not available, sending Nack")
+		err = s.createNack(dhcpLayer)
+		if err != nil {
+			return fmt.Errorf("error sending nack in response to request")
+		}
+		return nil
 
 	if requestedIP.Equal(net.IP{0, 0, 0, 0}) {
 		slog.Debug("Requested IP set to 0.0.0.0")
@@ -436,7 +437,7 @@ func (s *Server) processRelease(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
 	if clientMAC != nil {
 		s.cache.UnleaseMAC(clientMAC)
-		return nil 
+		return nil
 	}
 
 	clientIP := dhcpLayer.ClientIP
@@ -444,6 +445,8 @@ func (s *Server) processRelease(dhcpLayer *layers.DHCPv4) error {
 		s.cache.UnleaseIP(clientIP)
 		return nil
 	}
+
+	return nil
 }
 
 func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net.IP) (*layers.DHCPv4, error) {
