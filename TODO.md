@@ -10,3 +10,4 @@
 - Does addr request check that addr is in pool, or just not in leases
 
 - For some reason the server offers and IP, but doesnt ack it
+- Add could fail if db has unique for mac but leasecache does not check
