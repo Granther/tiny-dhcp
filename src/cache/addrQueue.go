@@ -14,7 +14,6 @@ type ListNode struct {
 
 type AddrQueue struct {
 	space 	int
-	// addMap	map[[16]byte]*ListNode
 	left  	*ListNode
 	right 	*ListNode
 }
