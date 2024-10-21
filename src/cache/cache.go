@@ -8,7 +8,7 @@ import (
 	"time"
 
 	database "gdhcp/database"
-	types "gdhcp/types"
+	"gdhcp/types"
 )
 
 type Cache struct {
@@ -93,7 +93,7 @@ func (c *Cache) FillQueue(num int) error {
 
 	// Add new addrs first (first to be picked)
 	for _, ip := range newAddrs {
-		ok := c.AddrQueue.enQueue(ip)
+		ok := c.AddrQueue.EnQueue(ip)
 		if !ok {
 			slog.Debug("Wasn't able to add all addrs to queue, maybe full")
 		}

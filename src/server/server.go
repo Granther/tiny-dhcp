@@ -248,6 +248,9 @@ func (s *Server) GenerateIP(db *sql.DB, config *c.Config) (net.IP, error) {
 	// }
 
 	ip := s.cache.AddrQueue.Front()
+	if !s.IsOccupiedStatic(ip) {
+		return ip, nil
+	}
 
 	return nil, fmt.Errorf("unable to generate ip addr, pool full?")
 }

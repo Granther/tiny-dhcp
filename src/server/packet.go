@@ -297,7 +297,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
 		if ok && s.cache.IsIPAvailable(requestedIPOpt.Data) {
 			// Remove from Queue
-			s.cache.AddrQueue.deQueue()
+			s.cache.AddrQueue.DeQueue()
 
 			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
 			err := s.cache.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)

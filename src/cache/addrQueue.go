@@ -13,9 +13,9 @@ type ListNode struct {
 }
 
 type AddrQueue struct {
-	space 	int
-	left  	*ListNode
-	right 	*ListNode
+	space int
+	left  *ListNode
+	right *ListNode
 }
 
 func NewListNode(val net.IP, prev *ListNode, next *ListNode) *ListNode {
@@ -69,7 +69,7 @@ func (q *AddrQueue) Rear() net.IP {
 	return q.right.prev.val
 }
 
-func (q *AddrQueue) enQueue(val net.IP) bool {
+func (q *AddrQueue) EnQueue(val net.IP) bool {
 	if q.isFull() {
 		return false
 	}
@@ -93,8 +93,7 @@ func (q *AddrQueue) nodeEnd(node *ListNode) {
 	q.right.prev = node
 }
 
-
-func (q *AddrQueue) deQueue() bool {
+func (q *AddrQueue) DeQueue() bool {
 	if q.isEmpty() {
 		return false
 	}
