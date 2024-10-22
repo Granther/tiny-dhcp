@@ -2,18 +2,18 @@ package utils
 
 import "github.com/google/gopacket/layers"
 
-func GetDHCPOption(options layers.DHCPOptions, optType layers.DHCPOpt) (layers.DHCPOption, bool) {
-	var opt layers.DHCPOption
-
-	for _, option := range options {
+// Attempts to extact specific DHCP option from DHCP options 
+func GetDHCPOption(options *layers.DHCPOptions, optType layers.DHCPOpt) (layers.DHCPOption, bool) {
+	for _, option := range *options {
 		if option.Type == optType {
 			return option, true
 		}
 	}
-	return opt, false
+	return layers.DHCPOption{}, false
 }
 
-func GetMessageTypeOption(options layers.DHCPOptions) (layers.DHCPMsgType, bool) {
+// Returns the DHCP message type from options
+func GetMessageTypeOption(options *layers.DHCPOptions) (layers.DHCPMsgType, bool) {
 	opt, found := GetDHCPOption(options, layers.DHCPOptMessageType)
 
 	// If the MessageType option is valid, try to convert
