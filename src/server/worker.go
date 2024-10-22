@@ -19,7 +19,7 @@ type Worker interface {
 type WorkerPool interface {
 	StartWorkers(numWorkers int)
 	Stop()
-	SubmitJob(jon Job) error
+	SubmitJob(job Job) error
 }
 
 type PacketJob struct {
