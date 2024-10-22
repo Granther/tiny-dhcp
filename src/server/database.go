@@ -1,9 +1,13 @@
 package server
 
-type DatabaseManager type {
+type PersistentStorage interface {
+	
+}
+
+type DatabaseManager struct {
 
 }
 
 func NewDatabaseManager() (*DatabaseManager, error) {
-	
+
 }

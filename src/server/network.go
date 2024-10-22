@@ -27,7 +27,7 @@ type NetworkManager struct {
 }
 
 // Instantiate new NetworkManager
-func NewNetworkManager(config *config.Config) (*NetworkManager, error) {
+func NewNetworkManager(config *config.Config) (NetworkInterface, error) {
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get interface by name of %s: %w", config.Server.ListenInterface, err)
@@ -35,7 +35,12 @@ func NewNetworkManager(config *config.Config) (*NetworkManager, error) {
 
 	serverIP, err := utils.GetInterfaceIP(iface)
 	if err != nil {
-		return nil, fmt.Errorf("failed to : %w", err)
+		return nil, fmt.Errorf("failed to retrieve server ip: %w", err)
+	}
+
+	serverMac, err := utils.GetInterfaceMac(iface)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve server mac: %w", err)
 	}
 
 	// Listen on all IPs
@@ -56,6 +61,7 @@ func NewNetworkManager(config *config.Config) (*NetworkManager, error) {
 		conn:     conn,
 		handle:   handle,
 		serverIP: serverIP,
+		serverMac: serverMac,
 		packetch: make(chan packetJob, 1000), // Can hold 1000 packets
 		sendch:   make(chan []byte, 1000),    // Can hold 1000 queued packets to be sent
 	}, nil

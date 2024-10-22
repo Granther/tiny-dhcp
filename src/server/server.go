@@ -31,18 +31,21 @@ type Server struct {
 	cache      *cache.Cache
 
 	workerPool chan struct{}
-	packetch   chan packetJob
+	packetch   chan PacketJob
 	ipch       chan net.IP
 	sendch     chan []byte
+
+	network NetworkInterface
+
 	quitch     chan struct{}
 }
 
-type packetJob struct {
-	data       []byte
-	clientAddr *net.UDPAddr
-}
+func NewServer(config *config.Config) (*Server, error) {
+	network, err := NewNetworkManager(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
+	}
 
-func NewServer(config config.Config) (*Server, error) {
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to get interface: %v", err))
@@ -94,6 +97,9 @@ func NewServer(config config.Config) (*Server, error) {
 		optionsMap: optionsMap,
 		db:         db,
 		cache:      newCache,
+
+		network: network,
+
 		workerPool: make(chan struct{}, numWorkers),
 		packetch:   make(chan packetJob, 1000), // Can hold 1000 packets
 		ipch:       make(chan net.IP),
@@ -110,8 +116,8 @@ func (s *Server) Start() error {
 		go s.worker()
 	}
 
-	go s.receivePackets()
-	go s.sendPackets()
+	go s.network.ReceivePackets()
+	go s.network.SendPackets()
 	go s.cache.PacketCache.CleanJob(15)
 
 	slog.Info("Server is now listening for packets/quitch")
@@ -127,18 +133,6 @@ func (s *Server) Start() error {
 	close(s.sendch)
 
 	return nil
-}
-
-func (s *Server) worker() {
-	for job := range s.packetch {
-		s.workerPool <- struct{}{}
-		err := s.handleDHCPPacket(job.data)
-		if err != nil {
-			slog.Error(fmt.Sprintf("Error occured while handline dhcp packet: %v", err))
-		}
-		// Reads one item off the worker queue
-		<-s.workerPool
-	}
 }
 
 // Function to handle a DHCP packet in a new goroutine
