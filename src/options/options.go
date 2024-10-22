@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	// "strings"
 	"encoding/binary"
 
 	"github.com/google/gopacket/layers"

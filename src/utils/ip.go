@@ -6,15 +6,10 @@ import (
 )
 
 // Return first IP bound to passed interface
-func GetInterfaceIP(ifaceName string) (net.IP, error) {
-	iface, err := net.InterfaceByName(ifaceName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get interface %s by name: %w", ifaceName, err)
-	}
-
+func GetInterfaceIP(iface *net.Interface) (net.IP, error) {
 	addrs, err := iface.Addrs()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get addresses bound to interface %s: %w", ifaceName, err)
+		return nil, fmt.Errorf("failed to get addresses bound to interface %s: %w", iface.Name, err)
 	}
 
 	// Use the first IP address the interface has
@@ -28,23 +23,27 @@ func GetInterfaceIP(ifaceName string) (net.IP, error) {
 	}
 
 	if ip == nil {
-		return nil, fmt.Errorf("no valid ipv4 address found on interface %s", ifaceName)
+		return nil, fmt.Errorf("no valid ipv4 address found on interface %s", iface.Name)
 	}
 
 	return ip, nil
 }
 
 // Return hardware address associated with interface
-func GetInterfaceHA(ifaceName string) (net.HardwareAddr, error) {
-	iface, err := net.InterfaceByName(ifaceName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get interface %s by name: %w", ifaceName, err)
-	}
-
+func GetInterfaceMac(iface *net.Interface) (net.HardwareAddr, error) {
 	hardwareAddr := iface.HardwareAddr
 	if hardwareAddr == nil {
-		return nil, fmt.Errorf("iface %s does not have a hardware address", ifaceName)
+		return nil, fmt.Errorf("iface %s does not have a hardware address", iface.Name)
 	}
 
 	return hardwareAddr, nil
+}
+
+// Returns built UDP addr using iface's IP
+func GetUDPAddr(iface *net.Interface) (*net.UDPAddr, error) {
+	ip, err := GetInterfaceIP(iface); if err != nil {
+		return nil, fmt.Errorf("failed to get ip for udp addr: %w", err)
+	}
+
+	return &net.UDPAddr{Port: 67, IP: ip}, nil
 }
