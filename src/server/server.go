@@ -35,8 +35,6 @@ type Server struct {
 	ipch       chan net.IP
 	sendch     chan []byte
 	quitch     chan struct{}
-
-	NetworkManager *NetworkManager
 }
 
 type packetJob struct {
@@ -72,7 +70,6 @@ func NewServer(config config.Config) (*Server, error) {
 		return nil, fmt.Errorf("could not open pcap device: %w", err)
 	}
 
-	optionsMap := options.CreateOptionMap(config)
 	numWorkers := config.Server.NumWorkers
 
 	db, err := database.ConnectDatabase()
@@ -129,44 +126,6 @@ func (s *Server) Start() error {
 	close(s.workerPool)
 	close(s.sendch)
 
-	return nil
-}
-
-func (s *Server) receivePackets() {
-	go func() {
-		for {
-			buffer := make([]byte, 4096)
-			n, clientAddr, err := s.conn.ReadFromUDP(buffer)
-			if err != nil {
-				slog.Error(fmt.Sprintf("Error receiving packet: %v", err))
-				continue
-			}
-
-			select {
-			case s.packetch <- packetJob{data: buffer[:n], clientAddr: clientAddr}:
-				// Packet added to queue
-			default:
-				// Queue is full, log and drop packet
-				slog.Warn(fmt.Sprintf("Packet queue full, dropping packet from %v", clientAddr))
-			}
-		}
-	}()
-}
-
-func (s *Server) sendPackets() {
-	// Iterate over sendchannel, send all ready packets
-	for packet := range s.sendch {
-		err := s.sendPacket(packet)
-		if err != nil {
-			slog.Debug(fmt.Sprintf("Error occured while sending ready packet: %v", err))
-		}
-	}
-}
-
-func (s *Server) sendPacket(packet []byte) error {
-	if err := s.handle.WritePacketData(packet); err != nil {
-		return fmt.Errorf("failed to send packet: %w", err)
-	}
 	return nil
 }
 
