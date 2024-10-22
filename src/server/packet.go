@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-
-	// "slices"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 
-	database "gdhcp/database"
+ 	"gdhcp/database"
 	dhcpUtils "gdhcp/dhcp"
 )
 
@@ -351,13 +349,13 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 		return nil
 	}
 
-	NACK:
-		slog.Debug("Requested IP is not available, sending Nack")
-		err = s.createNack(dhcpLayer)
-		if err != nil {
-			return fmt.Errorf("error sending nack in response to request")
-		}
-		return nil
+NACK:
+	slog.Debug("Requested IP is not available, sending Nack")
+	err = s.createNack(dhcpLayer)
+	if err != nil {
+		return fmt.Errorf("error sending nack in response to request")
+	}
+	return nil
 
 	if requestedIP.Equal(net.IP{0, 0, 0, 0}) {
 		slog.Debug("Requested IP set to 0.0.0.0")

@@ -5,8 +5,6 @@ import (
 	"net"
 
 	"github.com/google/gopacket/layers"
-	// "github.com/google/gopacket"
-	// c "gdhcp/config"
 )
 
 func GetDHCPOption(options layers.DHCPOptions, optType layers.DHCPOpt) (layers.DHCPOption, bool) {
@@ -75,12 +73,3 @@ func GetInterfaceHA(interfaceName string) (net.HardwareAddr, error) {
 	return hardwareAddr, nil
 }
 
-// func JsonIPListToBytes(jsonList []string) []bytes {
-// 	var byteSlice []byte
-
-// 	for ip := range jsonList {
-// 		byteSlice = append(byteSlice, net.ParseIP(ip).To4())
-// 	}
-
-// 	return byteSlice
-// }
