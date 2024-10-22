@@ -15,26 +15,28 @@ import (
 	"gdhcp/cache"
 	"gdhcp/config"
 	"gdhcp/database"
-	"gdhcp/utils"
 	"gdhcp/options"
+	"gdhcp/utils"
 )
 
 type Server struct {
-	conn       *net.UDPConn
-	handle     *pcap.Handle
-	serverIP   net.IP
-	serverMAC  net.HardwareAddr
-	config     config.Config
+	conn      *net.UDPConn
+	handle    *pcap.Handle
+	serverIP  net.IP
+	serverMAC net.HardwareAddr
+	config    config.Config
 
 	optionsMap map[layers.DHCPOpt]options.DHCPOptionValue
 	db         *sql.DB
 	cache      *cache.Cache
-	
+
 	workerPool chan struct{}
 	packetch   chan packetJob
 	ipch       chan net.IP
 	sendch     chan []byte
 	quitch     chan struct{}
+
+	NetworkManager *NetworkManager
 }
 
 type packetJob struct {
