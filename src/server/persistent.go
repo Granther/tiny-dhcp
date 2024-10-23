@@ -4,10 +4,10 @@ type PersistentHandler interface {
 	
 }
 
-type DatabaseManager struct {
+type SQLiteManager struct {
 
 }
 
-func NewDatabaseManager() (*DatabaseManager, error) {
+func NewSQLiteManager() (PersistentHandler, error) {
 
 }

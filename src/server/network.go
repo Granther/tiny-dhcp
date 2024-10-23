@@ -27,7 +27,7 @@ type NetworkManager struct {
 }
 
 // Instantiate new NetworkManager
-func NewNetworkHandler(config *config.Config) (NetworkHandler, error) {
+func NewNetworkManager(config *config.Config) (NetworkHandler, error) {
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get interface by name of %s: %w", config.Server.ListenInterface, err)

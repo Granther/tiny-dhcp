@@ -12,41 +12,51 @@ import (
 
 	"gdhcp/config"
 	"gdhcp/database"
-	"gdhcp/options"
 	"gdhcp/utils"
 )
 
 type Server struct {
-	config     config.Config
-	optionsMap map[layers.DHCPOpt]options.DHCPOptionValue
+	config ConfigHandler
+	// optionsMap map[layers.DHCPOpt]options.DHCPOptionValue
 	storage    PersistentHandler
 	network    NetworkHandler
 	packet     PacketHandler
 	options    OptionsHandler
 	cache      CacheHandler
-	workerPool WorkerPool
+	workerPool WorkerPoolHandler
 	quitch     chan struct{}
 }
 
-func NewServer(config *config.Config) (*Server, error) {
-	network, err := NewNetworkHandler(config)
+func NewServer(conf *config.Config) (*Server, error) {
+	config, err := NewConfigManager(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
 
-	packet, err := NewPacketHandler(network, config)
+	network, err := NewNetworkManager(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
+	}
+
+	packet, err := NewPacketManager(network, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create packet handler module for server instantiation: %w", err)
 	}
 
-	workerPool := NewWorkerPool(config.Server.NumWorkers, packet)
-
-	storage := NewStorage
-
-	db, err := database.ConnectDatabase()
+	workerPool, err := NewWorkerPoolManager(config.Server.NumWorkers, packet)
 	if err != nil {
-		return nil, fmt.Errorf("error occured when connecting to db object: %v", err)
+		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
+
+	storage, err := NewDBManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
+	}
+
+	// db, err := database.ConnectDatabase()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error occured when connecting to db object: %v", err)
+	// }
 
 	server := &Server{
 		network:    network,
