@@ -32,7 +32,6 @@ type Worker struct {
 	id         int
 	jobChannel <-chan JobHandler // Recieve only channel for jobs
 	quit       chan struct{}
-	handler    PacketHandler
 }
 
 type WorkerPool struct {
@@ -50,7 +49,7 @@ func (p PacketJob) Process() error {
 	return nil
 }
 
-func NewWorkerPool(numWorkers int, handler PacketHandler) WorkerPoolHandler {
+func NewWorkerPool(numWorkers int) WorkerPoolHandler {
 	return &WorkerPool{
 		numWorkers: numWorkers,
 		jobChannel: make(chan JobHandler, 1000), // Buffer size of 1000
@@ -59,12 +58,11 @@ func NewWorkerPool(numWorkers int, handler PacketHandler) WorkerPoolHandler {
 	}
 }
 
-func NewWorker(id int, jobChannel <-chan JobHandler, handler PacketHandler) WorkerHandler {
+func NewWorker(id int, jobChannel <-chan JobHandler) WorkerHandler {
 	return &Worker{
 		id:         id,
 		jobChannel: jobChannel,
 		quit:       make(chan struct{}),
-		handler:    handler,
 	}
 }
 
@@ -97,7 +95,7 @@ func (w *Worker) Stop() {
 func (wp *WorkerPool) StartWorkers(numWorkers int) {
 	wp.numWorkers = numWorkers
 	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(i, wp.jobChannel, nil)
+		worker := NewWorker(i, wp.jobChannel)
 		wp.workers = append(wp.workers, worker)
 		worker.Start()
 	}

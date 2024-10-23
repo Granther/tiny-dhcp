@@ -22,12 +22,12 @@ type NetworkManager struct {
 	handle    *pcap.Handle
 	serverIP  net.IP
 	serverMac net.HardwareAddr
-	packetch  chan packetJob
+	packetch  chan PacketJob
 	sendch    chan []byte
 }
 
 // Instantiate new NetworkManager
-func NewNetworkManager(config *config.Config) (NetworkHandler, error) {
+func NewNetworkManager (config *config.Config) (NetworkHandler, error) {
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get interface by name of %s: %w", config.Server.ListenInterface, err)
@@ -62,7 +62,7 @@ func NewNetworkManager(config *config.Config) (NetworkHandler, error) {
 		handle:   handle,
 		serverIP: serverIP,
 		serverMac: serverMac,
-		packetch: make(chan packetJob, 1000), // Can hold 1000 packets
+		packetch: make(chan PacketJob, 1000), // Can hold 1000 packets
 		sendch:   make(chan []byte, 1000),    // Can hold 1000 queued packets to be sent
 	}, nil
 }
@@ -72,12 +72,12 @@ func (n *NetworkManager) ReceivePackets() {
 		buffer := make([]byte, 4096)
 		num, clientAddr, err := n.conn.ReadFromUDP(buffer)
 		if err != nil {
-			slog.Error(fmt.Sprintf("Error receiving packet: %v", err))
+			slog.Error("Failed to read received packet", "error", err)
 			continue
 		}
 
 		select {
-		case n.packetch <- packetJob{data: buffer[:num], clientAddr: clientAddr}:
+		case n.packetch <- PacketJob{data: buffer[:num], clientAddr: clientAddr}:
 			// Packet added to queue
 		default:
 			// Queue is full, log and drop packet

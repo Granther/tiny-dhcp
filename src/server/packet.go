@@ -17,3 +17,4 @@ func NewPacketManager(network NetworkHandler, config *config.Config) (PacketHand
 func (p *PacketManager) HandleDHCPPacket(data []byte) error {
 	return nil
 }
+

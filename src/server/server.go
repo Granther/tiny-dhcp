@@ -26,13 +26,10 @@ type Server struct {
 	quitch     chan struct{}
 }
 
-func NewServer(conf *config.Config) (*Server, error) {
-	config, err := NewConfigManager(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
-	}
+func NewServer(serverConfig *config.Config) (*Server, error) {
+	workerPool := NewWorkerPool(serverConfig.Server.NumWorkers)
 
-	network, err := NewNetworkManager(config)
+	network, err := NewNetworkManager(serverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
@@ -40,11 +37,6 @@ func NewServer(conf *config.Config) (*Server, error) {
 	packet, err := NewPacketManager(network, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create packet handler module for server instantiation: %w", err)
-	}
-
-	workerPool, err := NewWorkerPoolManager(config.Server.NumWorkers, packet)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
 
 	storage, err := NewDBManager()
