@@ -13,11 +13,13 @@ import (
 
 // Options handler impl only has to impl CreateOptionsMap
 type OptionsHandler interface {
-	CreateOptionMap() map[layers.DHCPOpt]DHCPOptionValue
+	Create()
+	Get(layers.DHCPOpt) DHCPOptionValue
 }
 
 type OptionsManager struct {
-	config *config.Config
+	config  *config.Config
+	options map[layers.DHCPOpt]DHCPOptionValue
 }
 
 func NewOptionsManager(config *config.Config) OptionsHandler {
@@ -119,8 +121,12 @@ func (o *OptionsManager) GetClasslessSR() DHCPOptionValue {
 	return ClasslessStaticRoute(option)
 }
 
-func (o *OptionsManager) CreateOptionMap() map[layers.DHCPOpt]DHCPOptionValue {
-	return map[layers.DHCPOpt]DHCPOptionValue{
+func Get(layers.DHCPOpt) DHCPOptionValue {
+
+}
+
+func (o *OptionsManager) Create() {
+	options := map[layers.DHCPOpt]DHCPOptionValue{
 		layers.DHCPOptSubnetMask:    IPAddress(o.config.DHCP.SubnetMask),
 		layers.DHCPOptBroadcastAddr: IPAddress(o.config.DHCP.BroadcastAddr),
 		layers.DHCPOptRouter:        IPAddress(o.config.DHCP.Router),
@@ -143,4 +149,5 @@ func (o *OptionsManager) CreateOptionMap() map[layers.DHCPOpt]DHCPOptionValue {
 
 		// layers.DHCPOptClasslessStaticRoute: GetClasslessSR(config),
 	}
+	o.options = options
 }
