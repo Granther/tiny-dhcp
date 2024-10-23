@@ -133,10 +133,6 @@ func Unlease(db *sql.DB, dbLease *types.DatabaseLease) error {
 	return err
 }
 
-func FormatTime(time time.Time) string {
-	return time.Format("2006-01-02 15:04:05")
-}
-
 func GetLeasedIPs(db *sql.DB) ([]net.IP, error) {
     query := "SELECT id, ip FROM leases"
 
@@ -191,16 +187,6 @@ func GetLeases(db *sql.DB) ([]types.DatabaseLease, error) {
 	return leases, nil
 }
 
-func IPsContains(ips []net.IP, ip net.IP) bool {
-	for _, item := range ips {
-		if item.Equal(ip) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func UnleaseMAC(db *sql.DB, mac net.HardwareAddr) error {
 	leaseSelect := `DELETE FROM leases WHERE mac = ?;`
 	_, err := db.Exec(leaseSelect, mac.String())
@@ -212,20 +198,3 @@ func UnleaseMAC(db *sql.DB, mac net.HardwareAddr) error {
 	return nil
 }
 
-// // Function to increment the last octet of the IP address
-func IncrementIP(ip net.IP) net.IP {
-	newIP := make(net.IP, len(ip))
-	copy(newIP, ip)
-
-	for i := len(newIP) - 1; i >= 0; i-- {
-		newIP[i]++
-		if newIP[i] != 0 {
-			break
-		}
-	}
-	return newIP
-}
-
-func IsIPEqual(ip1, ip2 net.IP) bool {
-	return ip1.Equal(ip2)
-}

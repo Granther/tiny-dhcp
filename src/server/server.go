@@ -39,15 +39,10 @@ func NewServer(serverConfig *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to create packet handler module for server instantiation: %w", err)
 	}
 
-	storage, err := NewDBManager()
+	storage, err := NewSQLiteManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
-
-	// db, err := database.ConnectDatabase()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error occured when connecting to db object: %v", err)
-	// }
 
 	server := &Server{
 		network:    network,
@@ -112,7 +107,7 @@ func (s *Server) Start() error {
 }
 
 // Function to handle a DHCP packet in a new goroutine
-func (s *Server) handleDHCPPacket(packetSlice []byte) error {
+func (s *Server) HandleDHCPPacket(packetSlice []byte) error {
 	dhcpLayer, ok := gopacket.NewPacket(packetSlice, layers.LayerTypeDHCPv4, gopacket.Default).Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4)
 	if !ok {
 		return fmt.Errorf("error getting dhcp layer from packet")

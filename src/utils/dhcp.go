@@ -2,7 +2,7 @@ package utils
 
 import "github.com/google/gopacket/layers"
 
-// Attempts to extact specific DHCP option from DHCP options 
+// Attempts to extact specific DHCP option from DHCP options
 func GetDHCPOption(options *layers.DHCPOptions, optType layers.DHCPOpt) (layers.DHCPOption, bool) {
 	for _, option := range *options {
 		if option.Type == optType {

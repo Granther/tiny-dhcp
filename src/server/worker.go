@@ -6,10 +6,6 @@ import (
 	"net"
 )
 
-type JobHandler interface {
-	Process() error
-}
-
 type WorkerHandler interface {
 	Start()
 	Stop()
@@ -20,12 +16,6 @@ type WorkerPoolHandler interface {
 	StartWorkers(numWorkers int)
 	Stop()
 	SubmitJob(job JobHandler) error
-}
-
-type PacketJob struct {
-	data       []byte
-	clientAddr *net.UDPAddr
-	handler    PacketHandler
 }
 
 type Worker struct {
@@ -39,14 +29,6 @@ type WorkerPool struct {
 	jobChannel chan JobHandler // Bidirectional channel owned by the pool
 	workers    []WorkerHandler
 	quit       chan struct{}
-}
-
-func (p PacketJob) Process() error {
-	err := p.handler.HandleDHCPPacket(p.data)
-	if err != nil {
-		return fmt.Errorf("failure in processing packet data: %w", err)
-	}
-	return nil
 }
 
 func NewWorkerPool(numWorkers int) WorkerPoolHandler {

@@ -11,7 +11,7 @@ import (
 )
 
 type NetworkHandler interface {
-	ReceivePackets()
+	ReceivePackets(server *Server)
 	SendPackets()
 	SendPacket(packet []byte) error
 }
@@ -67,7 +67,7 @@ func NewNetworkManager (config *config.Config) (NetworkHandler, error) {
 	}, nil
 }
 
-func (n *NetworkManager) ReceivePackets() {
+func (n *NetworkManager) ReceivePackets(server *Server) {
 	for {
 		buffer := make([]byte, 4096)
 		num, clientAddr, err := n.conn.ReadFromUDP(buffer)
@@ -77,7 +77,7 @@ func (n *NetworkManager) ReceivePackets() {
 		}
 
 		select {
-		case n.packetch <- PacketJob{data: buffer[:num], clientAddr: clientAddr}:
+		case n.packetch <- PacketJob{data: buffer[:num], clientAddr: clientAddr, server: server}:
 			// Packet added to queue
 		default:
 			// Queue is full, log and drop packet
@@ -91,7 +91,7 @@ func (n *NetworkManager) SendPackets() {
 	for packet := range n.sendch {
 		err := n.SendPacket(packet)
 		if err != nil {
-			slog.Error("Error occured while sending ready packet, continuing...", "error", err))
+			slog.Error("Error occured while sending ready packet, continuing...", "error", err)
 		}
 	}
 }

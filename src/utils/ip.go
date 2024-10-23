@@ -41,9 +41,38 @@ func GetInterfaceMac(iface *net.Interface) (net.HardwareAddr, error) {
 
 // Returns built UDP addr using iface's IP
 func GetUDPAddr(iface *net.Interface) (*net.UDPAddr, error) {
-	ip, err := GetInterfaceIP(iface); if err != nil {
+	ip, err := GetInterfaceIP(iface)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get ip for udp addr: %w", err)
 	}
 
 	return &net.UDPAddr{Port: 67, IP: ip}, nil
+}
+
+// Increment the last octet of the IP address
+func IncrementIP(ip net.IP) net.IP {
+	newIP := make(net.IP, len(ip))
+	copy(newIP, ip)
+
+	for i := len(newIP) - 1; i >= 0; i-- {
+		newIP[i]++
+		if newIP[i] != 0 {
+			break
+		}
+	}
+	return newIP
+}
+
+func IsIPEqual(ip1, ip2 net.IP) bool {
+	return ip1.Equal(ip2)
+}
+
+func IPsContains(ips []net.IP, ip net.IP) bool {
+	for _, item := range ips {
+		if item.Equal(ip) {
+			return true
+		}
+	}
+
+	return false
 }
