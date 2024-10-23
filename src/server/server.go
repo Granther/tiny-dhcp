@@ -11,12 +11,11 @@ import (
 	"github.com/google/gopacket/layers"
 
 	"gdhcp/config"
-	"gdhcp/database"
 	"gdhcp/utils"
 )
 
 type Server struct {
-	config ConfigHandler
+	config *config.Config
 	// optionsMap map[layers.DHCPOpt]options.DHCPOptionValue
 	storage    PersistentHandler
 	network    NetworkHandler

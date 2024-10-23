@@ -1,21 +1,18 @@
 package main
 
 import (
-	"os"
-	"fmt"
-	"log"
+	"gdhcp/config"
+	"gdhcp/server"
 	"log/slog"
-
-	c "gdhcp/config"
-	s "gdhcp/server"
+	"os"
 )
 
 func CreateLogger(logLevel string) {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,
-		"info": slog.LevelInfo,
+		"info":  slog.LevelInfo,
 	}
-	
+
 	handlerOpts := &slog.HandlerOptions{
 		Level: levels[logLevel],
 	}
@@ -25,19 +22,19 @@ func CreateLogger(logLevel string) {
 }
 
 func main() {
-	config, err := c.ReadConfig("."); if err != nil {
-		log.Fatalf("Error parsing config file: %v", err)
+	jsonConfig := config.NewJSONConfigManager(".")
+	config, err := jsonConfig.ReadConfig()
+	if err != nil {
+		slog.Error("Error parsing config file: %w", err)
 		os.Exit(1)
-		return
 	}
 
 	CreateLogger(config.Server.LogLevel)
-	c.SetConfig(&config)
 
-	server, err := s.NewServer(config)
+	server, err := server.NewServer(&config)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Error occured while instantiating server: %v", err))
-		return
+		slog.Error("error occured while instantiating server: %w", err)
+		os.Exit(1)
 	}
 	server.Start()
 }
