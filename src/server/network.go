@@ -18,16 +18,17 @@ type NetworkHandler interface {
 
 // Handles UDP connection and network send/recv
 type NetworkManager struct {
-	conn      *net.UDPConn
-	handle    *pcap.Handle
-	serverIP  net.IP
-	serverMac net.HardwareAddr
-	packetch  chan PacketJob
-	sendch    chan []byte
+	conn       *net.UDPConn
+	handle     *pcap.Handle
+	serverIP   net.IP
+	serverMac  net.HardwareAddr
+	workerPool WorkerPoolHandler
+	packetch   chan PacketJob
+	sendch     chan []byte
 }
 
 // Instantiate new NetworkManager
-func NewNetworkManager (config *config.Config) (NetworkHandler, error) {
+func NewNetworkManager(workerPool WorkerPoolHandler, config *config.Config) (NetworkHandler, error) {
 	iface, err := net.InterfaceByName(config.Server.ListenInterface)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get interface by name of %s: %w", config.Server.ListenInterface, err)
@@ -58,31 +59,35 @@ func NewNetworkManager (config *config.Config) (NetworkHandler, error) {
 	}
 
 	return &NetworkManager{
-		conn:     conn,
-		handle:   handle,
-		serverIP: serverIP,
-		serverMac: serverMac,
-		packetch: make(chan PacketJob, 1000), // Can hold 1000 packets
-		sendch:   make(chan []byte, 1000),    // Can hold 1000 queued packets to be sent
+		conn:       conn,
+		handle:     handle,
+		serverIP:   serverIP,
+		serverMac:  serverMac,
+		workerPool: workerPool,
+		packetch:   make(chan PacketJob, 1000), // Can hold 1000 packets
+		sendch:     make(chan []byte, 1000),    // Can hold 1000 queued packets to be sent
 	}, nil
 }
 
 func (n *NetworkManager) ReceivePackets(server *Server) {
 	for {
 		buffer := make([]byte, 4096)
-		num, clientAddr, err := n.conn.ReadFromUDP(buffer)
+		num, _, err := n.conn.ReadFromUDP(buffer)
 		if err != nil {
 			slog.Error("Failed to read received packet", "error", err)
 			continue
 		}
 
-		select {
-		case n.packetch <- PacketJob{data: buffer[:num], clientAddr: clientAddr, server: server}:
-			// Packet added to queue
-		default:
-			// Queue is full, log and drop packet
-			slog.Warn("Packet queue full, dropping packet", "srcIP", clientAddr)
-		}
+		job := NewPacketJob(buffer[:num], server)
+		n.workerPool.SubmitJob(job)
+
+		// select {
+		// case n.packetch <- PacketJob{data: buffer[:num], clientAddr: clientAddr, server: server}:
+		// 	// Packet added to queue
+		// default:
+		// 	// Queue is full, log and drop packet
+		// 	slog.Warn("Packet queue full, dropping packet", "srcIP", clientAddr)
+		// }
 	}
 }
 
@@ -101,4 +106,13 @@ func (n *NetworkManager) SendPacket(packet []byte) error {
 		return fmt.Errorf("failed to send packet: %w", err)
 	}
 	return nil
+}
+
+func (n *NetworkManager) Close() {
+	close(n.packetch)
+	close(n.sendch)
+}
+
+func (n *NetworkManager) SubmitBytes(data []byte) {
+
 }

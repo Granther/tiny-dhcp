@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"log/slog"
-	"net"
 )
 
 type WorkerHandler interface {

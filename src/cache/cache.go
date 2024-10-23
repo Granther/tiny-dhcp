@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
@@ -9,10 +8,11 @@ import (
 
 	"gdhcp/database"
 	"gdhcp/types"
+	"gdhcp/utils"
 )
 
 type CacheHandler interface {
-
+	
 }
 
 type CacheManager struct {
@@ -23,19 +23,20 @@ type CacheManager struct {
 	Storage     database.PersistentHandler
 }
 
-func NewCacheManager(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string, db *sql.DB) *Cache {
+func NewCacheManager(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string, storage database.PersistentHandler) *CacheManager {
 	slog.Debug("Creating new generate cache, and all children")
 
-	return &Cache{
+	return &CacheManager{
 		AddrPool:    addrPool,
 		AddrQueue:   NewAddrQueue(queueMax),
-		LeasesCache: NewLeasesCache(db, leasesMax),
+		LeasesCache: NewLeasesCache(leasesMax),
 		PacketCache: NewPacketCache(packetCap, packetTTL),
+		Storage:     storage,
 	}
 }
 
-func (c *Cache) Init(db *sql.DB, num int) error {
-	err := c.ReadLeasesFromDB(db)
+func (c *CacheManager) Init(num int) error {
+	err := c.ReadLeasesFromDB()
 	if err != nil {
 		return nil
 	}
@@ -45,11 +46,11 @@ func (c *Cache) Init(db *sql.DB, num int) error {
 	return err
 }
 
-func (c *Cache) ReadLeasesFromDB(db *sql.DB) error {
+func (c *CacheManager) ReadLeasesFromDB() error {
 	// Read leases from db
 	// Build leasenode object
 	// Add to mac and ip cache
-	leases, err := database.GetLeases(db)
+	leases, err := c.Storage.GetLeases()
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,7 @@ func (c *Cache) ReadLeasesFromDB(db *sql.DB) error {
 	return nil
 }
 
-func (c *Cache) FillQueue(num int) error {
+func (c *CacheManager) FillQueue(num int) error {
 	// While new addrs list < num
 	// Generate addr from bottom of thing, if in cache or in queue, skip
 	// else, add
@@ -89,7 +90,7 @@ func (c *Cache) FillQueue(num int) error {
 	startIP := net.ParseIP(c.AddrPool[0])
 	endIP := net.ParseIP(c.AddrPool[1])
 
-	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < num; ip = database.IncrementIP(ip) {
+	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < num; ip = utils.IncrementIP(ip) {
 		val := c.LeasesCache.IPGet(ip)
 		if val == nil { // Doesnt exist in leases
 			newAddrs = append(newAddrs, ip)
@@ -107,50 +108,50 @@ func (c *Cache) FillQueue(num int) error {
 	return nil
 }
 
-func (c *Cache) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error {
+func (c *CacheManager) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error {
 	leaseLenDur := time.Duration(leaseLen) * time.Second
 	newNode := NewLeaseNode(ip, mac, leaseLenDur, time.Now())
 	c.LeasesCache.Put(newNode)
 
-	database.LeaseIP(c.LeasesCache.db, newNode.ip, newNode.mac, newNode.leaseLen, newNode.leasedOn)
+	c.Storage.LeaseIP(newNode.ip, newNode.mac, newNode.leaseLen, newNode.leasedOn)
 
 	return nil
 }
 
-func (c *Cache) Unlease(node *LeaseNode) {
+func (c *CacheManager) Unlease(node *LeaseNode) {
 	c.UnleaseDB(node)
 	c.LeasesCache.IPRemove(node.ip)
 }
 
-func (c *Cache) UnleaseDB(node *LeaseNode) error {
+func (c *CacheManager) UnleaseDB(node *LeaseNode) error {
 	dbLease := &types.DatabaseLease{
 		IP:       node.ip.String(),
 		MAC:      node.mac.String(),
-		LeasedOn: database.FormatTime(node.leasedOn),
+		LeasedOn: utils.FormatTime(node.leasedOn),
 		LeaseLen: int(node.leaseLen.Seconds()),
 	}
 
 	// Should sync, what if SQL fails
-	database.Unlease(c.LeasesCache.db, dbLease)
+	c.Storage.Unlease(dbLease)
 
 	return nil
 }
 
-func (c *Cache) UnleaseIP(ip net.IP) {
+func (c *CacheManager) UnleaseIP(ip net.IP) {
 	node := c.LeasesCache.IPGet(ip)
 	c.Unlease(node)
 }
 
-func (c *Cache) UnleaseMAC(mac net.HardwareAddr) {
+func (c *CacheManager) UnleaseMAC(mac net.HardwareAddr) {
 	node := c.LeasesCache.MACGet(mac)
 	c.Unlease(node)
 }
 
-func (c *Cache) IsIPAvailable(ip net.IP) bool {
+func (c *CacheManager) IsIPAvailable(ip net.IP) bool {
 	return c.LeasesCache.IPGet(ip) == nil
 }
 
-func (c *Cache) IsMACLeased(mac net.HardwareAddr) net.IP {
+func (c *CacheManager) IsMACLeased(mac net.HardwareAddr) net.IP {
 	node := c.LeasesCache.MACGet(mac)
 	if node == nil {
 		return nil

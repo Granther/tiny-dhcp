@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net"
 )
 
 type JobHandler interface {
@@ -10,9 +9,15 @@ type JobHandler interface {
 }
 
 type PacketJob struct {
-	data       []byte
-	clientAddr *net.UDPAddr
-	server     *Server
+	data   []byte
+	server *Server
+}
+
+func NewPacketJob(data []byte, server *Server) JobHandler {
+	return &PacketJob{
+		data:   data,
+		server: server,
+	}
 }
 
 func (p *PacketJob) Process(server *Server) error {

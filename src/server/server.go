@@ -29,35 +29,39 @@ type Server struct {
 }
 
 func NewServer(serverConfig *config.Config) (*Server, error) {
+	// Worker layer, where processing is done
 	workerPool := NewWorkerPool(serverConfig.Server.NumWorkers)
 
-	network, err := NewNetworkManager(serverConfig)
+	// Network layer, where the network is listened to
+	network, err := NewNetworkManager(workerPool, serverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
 
+	// Packet layer, where packets are assembled for sending
 	packet, err := NewPacketManager(network, serverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create packet handler module for server instantiation: %w", err)
 	}
 
+	// Storage layer, where external persistent data is stored
 	storage := database.NewSQLiteManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage module for server instantiation: %w", err)
 	}
 
-	cache := cache.NewCacheManager(storage, serverConfig)
+	// cache := cache.NewCacheManager(storage, serverConfig)
 
 	options := options.NewOptionsManager(serverConfig)
 
 	server := &Server{
-		config:		serverConfig,
+		config:     serverConfig,
 		workerPool: workerPool,
 		network:    network,
 		packet:     packet,
 		storage:    storage,
 		options:    options,
-		cache:      cache,
+		// cache:      cache,
 	}
 
 	return server, nil
@@ -69,7 +73,7 @@ func (s *Server) Start() error {
 	// Start all worker goroutes
 	s.workerPool.StartWorkers()
 
-	go s.network.ReceivePackets()
+	go s.network.ReceivePackets(s)
 	go s.network.SendPackets()
 	// go s.cache.PacketCache.CleanJob(15)
 
@@ -148,28 +152,28 @@ func (s *Server) GenerateIP(db *sql.DB) (net.IP, error) {
 	return nil, fmt.Errorf("unable to generate ip addr, pool full?")
 }
 
-	// packetCache := cache.NewPacketCache(5, 15)
-	// addrQueue := cache.NewAddrQueue(30)
-	// newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool, db)
-	// newCache.Init(db, 20)
-	// newCache.AddrQueue.PrintQueue()
-	// newCache.LeasesCache.PrintCache()
+// packetCache := cache.NewPacketCache(5, 15)
+// addrQueue := cache.NewAddrQueue(30)
+// newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool, db)
+// newCache.Init(db, 20)
+// newCache.AddrQueue.PrintQueue()
+// newCache.LeasesCache.PrintCache()
 
-	// return &Server{
-	// 	conn:       conn,
-	// 	handle:     handle,
-	// 	serverIP:   serverIP.IP,
-	// 	serverMAC:  iface.HardwareAddr,
-	// 	config:     config,
-	// 	optionsMap: optionsMap,
-	// 	db:         db,
-	// 	cache:      newCache,
+// return &Server{
+// 	conn:       conn,
+// 	handle:     handle,
+// 	serverIP:   serverIP.IP,
+// 	serverMAC:  iface.HardwareAddr,
+// 	config:     config,
+// 	optionsMap: optionsMap,
+// 	db:         db,
+// 	cache:      newCache,
 
-	// 	network: network,
+// 	network: network,
 
-	// 	workerPool: make(chan struct{}, numWorkers),
-	// 	packetch:   make(chan packetJob, 1000), // Can hold 1000 packets
-	// 	ipch:       make(chan net.IP),
-	// 	sendch:     make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
-	// 	quitch:     make(chan struct{}),
-	// }, nil
+// 	workerPool: make(chan struct{}, numWorkers),
+// 	packetch:   make(chan packetJob, 1000), // Can hold 1000 packets
+// 	ipch:       make(chan net.IP),
+// 	sendch:     make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
+// 	quitch:     make(chan struct{}),
+// }, nil
