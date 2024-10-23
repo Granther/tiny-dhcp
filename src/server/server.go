@@ -6,13 +6,10 @@ import (
 	"log"
 	"log/slog"
 	"net"
-	"os"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
 
-	"gdhcp/cache"
 	"gdhcp/config"
 	"gdhcp/database"
 	"gdhcp/options"
@@ -20,92 +17,70 @@ import (
 )
 
 type Server struct {
-	conn      *net.UDPConn
-	handle    *pcap.Handle
-	serverIP  net.IP
-	serverMAC net.HardwareAddr
-	config    config.Config
-
+	config     config.Config
 	optionsMap map[layers.DHCPOpt]options.DHCPOptionValue
-	db         *sql.DB
-	cache      *cache.Cache
-
-	workerPool chan struct{}
-	packetch   chan PacketJob
-	ipch       chan net.IP
-	sendch     chan []byte
-
-	network NetworkInterface
-
+	storage    PersistentHandler
+	network    NetworkHandler
+	packet     PacketHandler
+	options    OptionsHandler
+	cache      CacheHandler
+	workerPool WorkerPool
 	quitch     chan struct{}
 }
 
 func NewServer(config *config.Config) (*Server, error) {
-	network, err := NewNetworkManager(config)
+	network, err := NewNetworkHandler(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
 
-	iface, err := net.InterfaceByName(config.Server.ListenInterface)
+	packet, err := NewPacketHandler(network, config)
 	if err != nil {
-		slog.Error(fmt.Sprintf("failed to get interface: %v", err))
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to create packet handler module for server instantiation: %w", err)
 	}
 
-	serverIP, err := utils.GetUDPAddr(iface)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error occured while creating listen address struct, please review the interface configuration: %v", err))
-		os.Exit(1)
-	}
+	workerPool := NewWorkerPool(config.Server.NumWorkers, packet)
 
-	// Listen on all IPs
-	listenAddr := net.UDPAddr{IP: net.IP{0, 0, 0, 0}, Port: 67}
-	conn, err := net.ListenUDP("udp", &listenAddr)
-	if err != nil {
-		return nil, fmt.Errorf("error creating server UDP listener: %v", err)
-	}
-
-	// handle, err := pcap.OpenLive("\\Device\\NPF_{3C62326A-1389-4DB7-BCF8-55747D0B8757}", 1500, false, pcap.BlockForever)
-
-	// Create handle for responding to requests later on
-	handle, err := pcap.OpenLive(iface.Name, 1500, false, pcap.BlockForever)
-	if err != nil {
-		return nil, fmt.Errorf("could not open pcap device: %w", err)
-	}
-
-	numWorkers := config.Server.NumWorkers
+	storage := NewStorage
 
 	db, err := database.ConnectDatabase()
 	if err != nil {
 		return nil, fmt.Errorf("error occured when connecting to db object: %v", err)
 	}
 
+	server := &Server{
+		network:    network,
+		packet:     packet,
+		workerPool: workerPool,
+	}
+
+	return server, nil
+
 	// packetCache := cache.NewPacketCache(5, 15)
 	// addrQueue := cache.NewAddrQueue(30)
+	// newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool, db)
+	// newCache.Init(db, 20)
+	// newCache.AddrQueue.PrintQueue()
+	// newCache.LeasesCache.PrintCache()
 
-	newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool, db)
-	newCache.Init(db, 20)
-	newCache.AddrQueue.PrintQueue()
-	newCache.LeasesCache.PrintCache()
+	// return &Server{
+	// 	conn:       conn,
+	// 	handle:     handle,
+	// 	serverIP:   serverIP.IP,
+	// 	serverMAC:  iface.HardwareAddr,
+	// 	config:     config,
+	// 	optionsMap: optionsMap,
+	// 	db:         db,
+	// 	cache:      newCache,
 
-	return &Server{
-		conn:       conn,
-		handle:     handle,
-		serverIP:   serverIP.IP,
-		serverMAC:  iface.HardwareAddr,
-		config:     config,
-		optionsMap: optionsMap,
-		db:         db,
-		cache:      newCache,
+	// 	network: network,
 
-		network: network,
-
-		workerPool: make(chan struct{}, numWorkers),
-		packetch:   make(chan packetJob, 1000), // Can hold 1000 packets
-		ipch:       make(chan net.IP),
-		sendch:     make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
-		quitch:     make(chan struct{}),
-	}, nil
+	// 	workerPool: make(chan struct{}, numWorkers),
+	// 	packetch:   make(chan packetJob, 1000), // Can hold 1000 packets
+	// 	ipch:       make(chan net.IP),
+	// 	sendch:     make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
+	// 	quitch:     make(chan struct{}),
+	// }, nil
 }
 
 func (s *Server) Start() error {

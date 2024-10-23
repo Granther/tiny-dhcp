@@ -2,60 +2,112 @@ package server
 
 import (
 	"fmt"
-	"gdhcp/config"
 	"log/slog"
 	"net"
 )
 
-type Job interface {
+type JobHandler interface {
 	Process() error
 }
 
-type Worker interface {
+type WorkerHandler interface {
 	Start()
 	Stop()
 }
 
-type WorkerPool interface {
+// Exported interface to be used in Server struct
+type WorkerPoolHandler interface {
 	StartWorkers(numWorkers int)
 	Stop()
-	SubmitJob(job Job) error
+	SubmitJob(job JobHandler) error
 }
 
 type PacketJob struct {
 	data       []byte
 	clientAddr *net.UDPAddr
+	handler    PacketHandler
 }
 
-type defaultWorker struct {
+type Worker struct {
 	id         int
-	jobChannel <-chan Job // Bidirectional channel owned by the pool
-	workers    []Worker
+	jobChannel <-chan JobHandler // Recieve only channel for jobs
+	quit       chan struct{}
+	handler    PacketHandler
+}
+
+type WorkerPool struct {
+	numWorkers int
+	jobChannel chan JobHandler // Bidirectional channel owned by the pool
+	workers    []WorkerHandler
 	quit       chan struct{}
 }
 
 func (p PacketJob) Process() error {
+	err := p.handler.HandleDHCPPacket(p.data)
+	if err != nil {
+		return fmt.Errorf("failure in processing packet data: %w", err)
+	}
 	return nil
 }
 
-type WorkerInterface interface {
+func NewWorkerPool(numWorkers int, handler PacketHandler) WorkerPoolHandler {
+	return &WorkerPool{
+		numWorkers: numWorkers,
+		jobChannel: make(chan JobHandler, 1000), // Buffer size of 1000
+		workers:    make([]WorkerHandler, 0, numWorkers),
+		quit:       make(chan struct{}),
+	}
 }
 
-type WorkerManager struct {
+func NewWorker(id int, jobChannel <-chan JobHandler, handler PacketHandler) WorkerHandler {
+	return &Worker{
+		id:         id,
+		jobChannel: jobChannel,
+		quit:       make(chan struct{}),
+		handler:    handler,
+	}
 }
 
-func NewWorkerManager(config *config.Config) (WorkerInterface, error) {
-
+func (wp *WorkerPool) Stop() {
+	close(wp.quit)
+	for _, worker := range wp.workers {
+		worker.Stop()
+	}
 }
 
-func (w *WorkerManager) worker() {
-	for job := range s.packetch {
-		s.workerPool <- struct{}{}
-		err := s.handleDHCPPacket(job.data)
-		if err != nil {
-			slog.Error(fmt.Sprintf("Error occured while handline dhcp packet: %v", err))
+func (w *Worker) Start() {
+	go func() {
+		for {
+			select {
+			case job := <-w.jobChannel:
+				if err := job.Process(); err != nil {
+					slog.Error("Error processing worker job", "error", err)
+				}
+			case <-w.quit:
+				return
+			}
 		}
-		// Reads one item off the worker queue
-		<-s.workerPool
+	}()
+}
+
+func (w *Worker) Stop() {
+	close(w.quit)
+}
+
+func (wp *WorkerPool) StartWorkers(numWorkers int) {
+	wp.numWorkers = numWorkers
+	for i := 0; i < numWorkers; i++ {
+		worker := NewWorker(i, wp.jobChannel, nil)
+		wp.workers = append(wp.workers, worker)
+		worker.Start()
+	}
+}
+
+func (wp *WorkerPool) SubmitJob(job JobHandler) error {
+	select {
+	case wp.jobChannel <- job:
+		return nil
+	default:
+		return fmt.Errorf("unable to submit job, job queue is full")
 	}
 }

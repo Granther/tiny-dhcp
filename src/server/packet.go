@@ -1,10 +1,19 @@
 package server
 
-type PacketManager struct {
-	workerPool	chan struct{}
-	packetch
+import "gdhcp/config"
+
+type PacketHandler interface {
+	HandleDHCPPacket(data []byte) error
 }
 
-func NewPacketManager() (*PacketManager, error) {
+type PacketManager struct {
+	workerPool chan struct{}
+}
 
+func NewPacketManager(network NetworkHandler, config *config.Config) (PacketHandler, error) {
+	return &PacketManager{}, nil
+}
+
+func (p *PacketManager) HandleDHCPPacket(data []byte) error {
+	return nil
 }

@@ -1,6 +1,6 @@
 package server
 
-type PersistentStorage interface {
+type PersistentHandler interface {
 	
 }
 
