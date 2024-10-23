@@ -14,6 +14,8 @@ type NetworkHandler interface {
 	ReceivePackets(server *Server)
 	SendPackets()
 	SendPacket(packet []byte) error
+	SubmitBytes(data []byte)
+	Close()
 }
 
 // Handles UDP connection and network send/recv
@@ -114,5 +116,5 @@ func (n *NetworkManager) Close() {
 }
 
 func (n *NetworkManager) SubmitBytes(data []byte) {
-
+	n.sendch <- data
 }

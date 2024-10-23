@@ -83,11 +83,8 @@ func (s *Server) Start() error {
 	<-s.quitch
 
 	// Close connection and channels
-	s.conn.Close()
-	s.handle.Close()
-	close(s.packetch)
-	close(s.workerPool)
-	close(s.sendch)
+	s.workerPool.Stop()
+	s.network.Close()
 
 	return nil
 }

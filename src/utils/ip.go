@@ -2,7 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
+
+	"github.com/google/gopacket/layers"
 )
 
 // Return first IP bound to passed interface
@@ -75,4 +78,32 @@ func IPsContains(ips []net.IP, ip net.IP) bool {
 	}
 
 	return false
+}
+
+// Fixes mac addr to be correct size if sent as locally administered, returns true if LA'd
+func processMAC(mac net.HardwareAddr) (net.HardwareAddr, bool, error) {
+	if len(mac) > 6 {
+		slog.Debug("Mac is larger than 6 bytes, fixing...")
+		mac = mac[1:]
+		return mac, true, nil
+	} else if len(mac) == 6 {
+		slog.Debug("Mac is good")
+		return mac, false, nil
+	} else {
+		return net.HardwareAddr{}, false, fmt.Errorf("error processing mac addr")
+	}
+}
+
+func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
+	clientMAC, ok := GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptClientID)
+	if !ok {
+		return nil, fmt.Errorf("unable to get client mac from dhcp layer")
+	}
+
+	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data))
+	if err != nil {
+		return nil, fmt.Errorf("error processing mac to usable form: %v", err)
+	}
+
+	return mac, nil
 }

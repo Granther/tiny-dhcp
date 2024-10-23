@@ -5,7 +5,7 @@ import (
 )
 
 type JobHandler interface {
-	Process(server *Server) error
+	Process() error
 }
 
 type PacketJob struct {
@@ -20,7 +20,7 @@ func NewPacketJob(data []byte, server *Server) JobHandler {
 	}
 }
 
-func (p *PacketJob) Process(server *Server) error {
+func (p *PacketJob) Process() error {
 	err := p.server.HandleDHCPPacket(p.data)
 	if err != nil {
 		return fmt.Errorf("failure in processing packet data: %w", err)

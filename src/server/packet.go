@@ -3,7 +3,6 @@ package server
 import "gdhcp/config"
 
 type PacketHandler interface {
-	HandleDHCPPacket(data []byte) error
 }
 
 type PacketManager struct {
@@ -14,7 +13,4 @@ func NewPacketManager(network NetworkHandler, config *config.Config) (PacketHand
 	return &PacketManager{}, nil
 }
 
-func (p *PacketManager) HandleDHCPPacket(data []byte) error {
-	return nil
-}
 

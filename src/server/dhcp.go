@@ -9,37 +9,8 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 
- 	"gdhcp/database"
-	dhcpUtils "gdhcp/dhcp"
+	"gdhcp/utils"
 )
-
-// Fixes mac addr to be correct size if sent as locally administered, returns true if LA'd
-func processMAC(mac net.HardwareAddr) (net.HardwareAddr, bool, error) {
-	if len(mac) > 6 {
-		slog.Debug("Mac is larger than 6 bytes, fixing...")
-		mac = mac[1:]
-		return mac, true, nil
-	} else if len(mac) == 6 {
-		slog.Debug("Mac is good")
-		return mac, false, nil
-	} else {
-		return net.HardwareAddr{}, false, fmt.Errorf("error processing mac addr")
-	}
-}
-
-func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
-	clientMAC, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptClientID)
-	if !ok {
-		return nil, fmt.Errorf("unable to get client mac from dhcp layer")
-	}
-
-	mac, _, err := processMAC(net.HardwareAddr(clientMAC.Data))
-	if err != nil {
-		return nil, fmt.Errorf("error processing mac to usable form: %v", err)
-	}
-
-	return mac, nil
-}
 
 func (s *Server) createNack(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
@@ -57,7 +28,7 @@ func (s *Server) createNack(dhcpLayer *layers.DHCPv4) error {
 	packetBuf := *packetPtr
 
 	slog.Info("Sending nak to client mac: %v", clientMAC.String())
-	s.sendch <- packetBuf.Bytes()
+	s.network.SubmitBytes(packetBuf.Bytes())
 
 	return nil
 }
@@ -87,7 +58,7 @@ func (s *Server) constructNackLayer(requestDhcpLayer *layers.DHCPv4) (*layers.DH
 
 func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgType) (*layers.DHCPOptions, bool) {
 	// Get RequestParams Option from layer.Options
-	requestList, ok := dhcpUtils.GetDHCPOption(layer.Options, layers.DHCPOptParamsRequest)
+	requestList, ok := utils.GetDHCPOption(&layer.Options, layers.DHCPOptParamsRequest)
 	if !ok {
 		return nil, false
 	}
@@ -111,7 +82,7 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 	}
 
 	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
-	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.serverIP.To4())
+	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.network.serverIP.To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
 	dhcpOptions = append(dhcpOptions, dhcpLeaseTime)
@@ -160,12 +131,12 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
 
 	// Checks wether the addr exists, expired or not
-	offeredIP := database.IsMACLeased(s.db, clientMAC)
+	offeredIP := s.storage.IsMACLeased(clientMAC)
 	if offeredIP != nil {
 		slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.String())
 	} else {
-		requestedIP, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-		if ok && database.IsIPAvailable(s.db, requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
+		requestedIP, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
+		if ok && s.storage.IsIPAvailable(requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
 			slog.Debug("Using requested IP from Discover", "ip", requestedIP.Data)
 			offeredIP = requestedIP.Data
 		} else {
@@ -189,7 +160,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 
 	s.cache.PacketCache.Set(string(dhcpLayer.Xid), offerLayer)
 	slog.Info("Offering Ip to client", "ip", offeredIP, "mac", clientMAC.String())
-	s.sendch <- (*packetPtr).Bytes()
+	s.network.SubmitBytes((*packetPtr).Bytes())
 
 	return nil
 }
@@ -222,8 +193,8 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 	prevPacket := s.cache.PacketCache.Get(string(dhcpLayer.Xid))
 
-	requestedIPOpt, requestedOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
-	serverIdentOpt, serverIdOpOk := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptServerID)
+	requestedIPOpt, requestedOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
+	serverIdentOpt, serverIdOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptServerID)
 
 	if prevPacket != nil {
 		if serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.serverIP) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) && prevPacket.YourClientIP.Equal(net.IP(requestedIPOpt.Data)) {
@@ -292,7 +263,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	requestedIP := net.IP{0, 0, 0, 0}
 
 	if requestType == "selecting" {
-		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
 		if ok && s.cache.IsIPAvailable(requestedIPOpt.Data) {
 			// Remove from Queue
 			s.cache.AddrQueue.DeQueue()
@@ -308,7 +279,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 		}
 	} else if requestType == "init" {
 		oldIP := s.cache.IsMACLeased(clientMAC)
-		requestedIPOpt, ok := dhcpUtils.GetDHCPOption(dhcpLayer.Options, layers.DHCPOptRequestIP)
+		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
 
 		slog.Debug("Request Init", "OldIP", oldIP.String(), "Reqip", net.IP(requestedIPOpt.Data).String())
 
@@ -372,7 +343,7 @@ NACK:
 	packetBuf := *packetPtr
 
 	slog.Info(fmt.Sprintf("Acking to Ip: %v", requestedIP.String()))
-	s.sendch <- packetBuf.Bytes()
+	s.network.SubmitBytes(packetBuf.Bytes())
 
 	return nil
 }
@@ -428,7 +399,7 @@ func (s *Server) processInform(dhcpLayer *layers.DHCPv4) error {
 	packetBuf := *packetPtr
 
 	slog.Info(fmt.Sprintf("Acking inform to Ip: %v", clientIP.String()))
-	s.sendch <- packetBuf.Bytes()
+	s.network.SubmitBytes(packetBuf.Bytes())
 
 	return nil
 }
@@ -499,7 +470,7 @@ func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) {
 	gopacket.SerializeLayers(buf, opts, ethLayer, arpLayer)
 
 	slog.Info(fmt.Sprintf("Sending arp request to IP: %v", dstIP.String()))
-	s.sendch <- buf.Bytes()
+	s.network.SubmitBytes(buf.Bytes())
 
 	return
 }
@@ -538,5 +509,3 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
 		}
 	}
 }
-
-// HYPE HYPE HYPE DONT BE LAZY
