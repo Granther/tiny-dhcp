@@ -7,18 +7,23 @@ import (
 	"net"
 	"time"
 
-	database "gdhcp/database"
+	"gdhcp/database"
 	"gdhcp/types"
 )
 
-type Cache struct {
+type CacheHandler interface {
+
+}
+
+type CacheManager struct {
 	AddrPool    []string
 	AddrQueue   *AddrQueue
 	LeasesCache *LeasesCache
 	PacketCache *PacketCache
+	Storage     database.PersistentHandler
 }
 
-func NewCache(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string, db *sql.DB) *Cache {
+func NewCacheManager(packetCap int, packetTTL int, leasesMax int, queueMax int, addrPool []string, db *sql.DB) *Cache {
 	slog.Debug("Creating new generate cache, and all children")
 
 	return &Cache{

@@ -13,7 +13,7 @@ type WorkerHandler interface {
 
 // Exported interface to be used in Server struct
 type WorkerPoolHandler interface {
-	StartWorkers(numWorkers int)
+	StartWorkers()
 	Stop()
 	SubmitJob(job JobHandler) error
 }
@@ -74,9 +74,8 @@ func (w *Worker) Stop() {
 	close(w.quit)
 }
 
-func (wp *WorkerPool) StartWorkers(numWorkers int) {
-	wp.numWorkers = numWorkers
-	for i := 0; i < numWorkers; i++ {
+func (wp *WorkerPool) StartWorkers() {
+	for i := 0; i < wp.numWorkers; i++ {
 		worker := NewWorker(i, wp.jobChannel)
 		wp.workers = append(wp.workers, worker)
 		worker.Start()
