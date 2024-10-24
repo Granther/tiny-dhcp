@@ -6,6 +6,8 @@ import (
 	"net"
 )
 
+
+
 type ListNode struct {
 	val  net.IP
 	prev *ListNode

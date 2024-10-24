@@ -8,6 +8,13 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
+type PacketHandler interface {
+	Set(key string, val *layers.DHCPv4) error
+	Get(key string) *layers.DHCPv4
+	Remove(key string) 
+	CleanJob(frequency int)
+}
+
 type CacheNode struct {
 	created		time.Time
 	key			string
@@ -20,7 +27,7 @@ type PacketCache struct {
 	ttl 	time.Duration
 } 
 
-func NewPacketCache(cap int, ttl int) *PacketCache {
+func NewPacketCache(cap int, ttl int) PacketHandler {
 	slog.Debug("Creating new packet cache", "ttl", ttl, "cap", cap)
 	ttlDur := time.Duration(time.Second * time.Duration(ttl))
 
@@ -79,7 +86,6 @@ func (p *PacketCache) CleanJob(frequency int) {
 
 	for {
 		time.Sleep(freqTime)
-		// slog.Debug("Cleaning cache...", "freq", freqTime)
 		p.Clean()
 	}
 }

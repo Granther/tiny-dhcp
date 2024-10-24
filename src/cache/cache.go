@@ -11,8 +11,18 @@ import (
 	"gdhcp/utils"
 )
 
-type CacheHandler interface {
-	
+type LeaseHandler interface {
+	LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error
+    UnleaseIP(ip net.IP) error
+    UnleaseMAC(mac net.HardwareAddr) error
+    IsIPAvailable(ip net.IP) bool
+    IsMACLeased(mac net.HardwareAddr) net.IP
+}
+
+type AddrQueueHandler interface {
+	FillQueue(num int) error
+	DeQueue() (net.IP, error)
+	Enqueue(ip net.IP) bool
 }
 
 type CacheManager struct {
@@ -106,56 +116,4 @@ func (c *CacheManager) FillQueue(num int) error {
 	}
 
 	return nil
-}
-
-func (c *CacheManager) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error {
-	leaseLenDur := time.Duration(leaseLen) * time.Second
-	newNode := NewLeaseNode(ip, mac, leaseLenDur, time.Now())
-	c.LeasesCache.Put(newNode)
-
-	c.Storage.LeaseIP(newNode.ip, newNode.mac, newNode.leaseLen, newNode.leasedOn)
-
-	return nil
-}
-
-func (c *CacheManager) Unlease(node *LeaseNode) {
-	c.UnleaseDB(node)
-	c.LeasesCache.IPRemove(node.ip)
-}
-
-func (c *CacheManager) UnleaseDB(node *LeaseNode) error {
-	dbLease := &types.DatabaseLease{
-		IP:       node.ip.String(),
-		MAC:      node.mac.String(),
-		LeasedOn: utils.FormatTime(node.leasedOn),
-		LeaseLen: int(node.leaseLen.Seconds()),
-	}
-
-	// Should sync, what if SQL fails
-	c.Storage.Unlease(dbLease)
-
-	return nil
-}
-
-func (c *CacheManager) UnleaseIP(ip net.IP) {
-	node := c.LeasesCache.IPGet(ip)
-	c.Unlease(node)
-}
-
-func (c *CacheManager) UnleaseMAC(mac net.HardwareAddr) {
-	node := c.LeasesCache.MACGet(mac)
-	c.Unlease(node)
-}
-
-func (c *CacheManager) IsIPAvailable(ip net.IP) bool {
-	return c.LeasesCache.IPGet(ip) == nil
-}
-
-func (c *CacheManager) IsMACLeased(mac net.HardwareAddr) net.IP {
-	node := c.LeasesCache.MACGet(mac)
-	if node == nil {
-		return nil
-	}
-
-	return node.ip
 }

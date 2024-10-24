@@ -21,7 +21,8 @@ type Server struct {
 	config     *config.Config
 	storage    database.PersistentHandler
 	network    NetworkHandler
-	packet     PacketHandler
+	leaseCache cache.LeaseCacheHandler
+	packet     cache.PacketHandler
 	options    options.OptionsHandler
 	cache      cache.CacheHandler
 	workerPool WorkerPoolHandler

@@ -1,8 +1,10 @@
 package cache
 
 import (
-	"database/sql"
 	"fmt"
+	"gdhcp/database"
+	"gdhcp/types"
+	"gdhcp/utils"
 	"net"
 	"time"
 )
@@ -12,8 +14,17 @@ import (
 // At runtime queue of N addrs is created
 // If queue is empty, add additionalt pool of N available addrs (if possible)
 
-type LeasesCache struct {
-	db       *sql.DB
+type LeaseCacheHandler interface {
+	IsMACLeased(mac net.HardwareAddr) net.IP
+	IsIPAvailable(ip net.IP) bool
+	UnleaseMAC(mac net.HardwareAddr)
+	UnleaseIP(ip net.IP)
+	Unlease(node *LeaseNode)
+	LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error
+}
+
+type LeaseCache struct {
+	storage  database.PersistentHandler
 	ipCache  map[[16]byte]*LeaseNode
 	macCache map[string]*LeaseNode
 }
@@ -25,6 +36,17 @@ type LeaseNode struct {
 	leasedOn time.Time
 }
 
+func NewLeaseCache(storage database.PersistentHandler, max int) LeaseCacheHandler {
+	ipCache := make(map[[16]byte]*LeaseNode)
+	macCache := make(map[string]*LeaseNode)
+
+	return &LeaseCache{
+		storage:  storage,
+		ipCache:  ipCache,
+		macCache: macCache,
+	}
+}
+
 func NewLeaseNode(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, leasedOn time.Time) *LeaseNode {
 	return &LeaseNode{
 		ip:       ip,
@@ -34,25 +56,14 @@ func NewLeaseNode(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, lease
 	}
 }
 
-func NewLeasesCache(db *sql.DB, max int) *LeasesCache {
-	ipCache := make(map[[16]byte]*LeaseNode)
-	macCache := make(map[string]*LeaseNode)
-
-	return &LeasesCache{
-		db:       db,
-		ipCache:  ipCache,
-		macCache: macCache,
-	}
-}
-
-func (l *LeasesCache) Put(newNode *LeaseNode) {
-	ip := IpTo16(newNode.ip)
+func (l *LeaseCache) Put(newNode *LeaseNode) {
+	ip := utils.IpTo16(newNode.ip)
 	l.ipCache[*ip] = newNode
 	l.macCache[newNode.mac.String()] = newNode
 }
 
-func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
-	ipBytes := IpTo16(ip)
+func (l *LeaseCache) IPGet(ip net.IP) *LeaseNode {
+	ipBytes := utils.IpTo16(ip)
 	val, ok := l.ipCache[*ipBytes]
 	if ok {
 		return val
@@ -60,7 +71,7 @@ func (l *LeasesCache) IPGet(ip net.IP) *LeaseNode {
 	return nil
 }
 
-func (l *LeasesCache) MACGet(mac net.HardwareAddr) *LeaseNode {
+func (l *LeaseCache) MACGet(mac net.HardwareAddr) *LeaseNode {
 	val, ok := l.macCache[mac.String()]
 	if ok {
 		return val
@@ -68,16 +79,16 @@ func (l *LeasesCache) MACGet(mac net.HardwareAddr) *LeaseNode {
 	return nil
 }
 
-func (l *LeasesCache) IPRemove(ip net.IP) {
-	ipBytes := IpTo16(ip)
+func (l *LeaseCache) IPRemove(ip net.IP) {
+	ipBytes := utils.IpTo16(ip)
 	delete(l.ipCache, *ipBytes)
 }
 
-func (l *LeasesCache) MACRemove(mac net.HardwareAddr) {
+func (l *LeaseCache) MACRemove(mac net.HardwareAddr) {
 	delete(l.macCache, mac.String())
 }
 
-func (l *LeasesCache) LeaseExpired(ip net.IP) bool {
+func (l *LeaseCache) LeaseExpired(ip net.IP) bool {
 	val := l.IPGet(ip)
 	if val == nil {
 		return true
@@ -87,14 +98,60 @@ func (l *LeasesCache) LeaseExpired(ip net.IP) bool {
 	return timeSince >= val.leaseLen
 }
 
-func (l *LeasesCache) PrintCache() {
+func (l *LeaseCache) PrintCache() {
 	for _, val := range l.ipCache {
 		fmt.Printf("IP: %v, MAC: %v\n", val.ip.String(), val.mac.String())
 	}
 }
 
-func IpTo16(ip net.IP) *[16]byte {
-	var ipArr [16]byte
-	copy(ipArr[:], ip.To16())
-	return &ipArr
+func (l *LeaseCache) LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error {
+	leaseLenDur := time.Duration(leaseLen) * time.Second
+	newNode := NewLeaseNode(ip, mac, leaseLenDur, time.Now())
+	l.Put(newNode)
+
+	l.storage.LeaseIP(newNode.ip, newNode.mac, newNode.leaseLen, newNode.leasedOn)
+
+	return nil
+}
+
+func (l *LeaseCache) Unlease(node *LeaseNode) {
+	l.Unleasestorage(node)
+	l.IPRemove(node.ip)
+}
+
+func (l *LeaseCache) Unleasestorage(node *LeaseNode) error {
+	storageLease := &types.DatabaseLease{
+		IP:       node.ip.String(),
+		MAC:      node.mac.String(),
+		LeasedOn: utils.FormatTime(node.leasedOn),
+		LeaseLen: int(node.leaseLen.Seconds()),
+	}
+
+	// Should sync, what if SQL fails
+	l.storage.Unlease(storageLease)
+
+	return nil
+}
+
+func (l *LeaseCache) UnleaseIP(ip net.IP) {
+	node := l.IPGet(ip)
+	l.Unlease(node)
+}
+
+func (l *LeaseCache) UnleaseMAC(mac net.HardwareAddr) {
+	node := l.MACGet(mac)
+	l.Unlease(node)
+}
+
+func (l *LeaseCache) IsIPAvailable(ip net.IP) bool {
+	return l.IPGet(ip) == nil
+}
+
+func (l *LeaseCache) IsMACLeased(mac net.HardwareAddr) net.IP {
+	node := l.MACGet(mac)
+	if node == nil {
+		return nil
+	}
+
+	return node.ip
 }

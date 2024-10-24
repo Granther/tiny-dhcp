@@ -107,3 +107,10 @@ func extractMAC(dhcpLayer *layers.DHCPv4) (net.HardwareAddr, error) {
 
 	return mac, nil
 }
+
+// Convert net ip to 16 byte representation
+func IpTo16(ip net.IP) *[16]byte {
+	var ipArr [16]byte
+	copy(ipArr[:], ip.To16())
+	return &ipArr
+}
