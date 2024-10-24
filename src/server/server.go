@@ -81,7 +81,7 @@ func (s *Server) Start() error {
 
 	// Begin listening for new jobs
 	// Do this last as we MUST be ready
-	go s.network.ReceivePackets(s.HandleDHCPPacket)
+	go s.network.ReceivePackets(s.HandleDHCPPacket) // Pass callback
 	go s.network.SendPackets()
 
 	slog.Info("Server is now listening for packets/quitch")
