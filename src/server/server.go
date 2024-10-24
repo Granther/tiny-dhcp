@@ -71,9 +71,21 @@ func (s *Server) Start() error {
 	// Start all worker goroutes
 	s.workerPool.StartWorkers()
 
+	// Ensure a storage connection can be made
+	s.storage.Connect()
+
+	// Fill lease in-memory data
+	s.lease.ReadLeasesFromPersistent()
+	s.addr.FillQueue()
+	s.packet.CleanJob(15)
+
+	// Create options map
+	s.options.Create()
+
+	// Begin listening for new jobs
+	// Do this last as we MUST be ready
 	go s.network.ReceivePackets(s)
 	go s.network.SendPackets()
-	// go s.cache.PacketCache.CleanJob(15)
 
 	slog.Info("Server is now listening for packets/quitch")
 
@@ -146,29 +158,3 @@ func (s *Server) GenerateIP(db *sql.DB) (net.IP, error) {
 
 	return nil, fmt.Errorf("unable to generate ip addr, pool full?")
 }
-
-// packetCache := cache.NewPacketCache(5, 15)
-// addrQueue := cache.NewAddrQueue(30)
-// newCache := cache.NewCache(5, 15, 20, 20, config.DHCP.AddrPool, db)
-// newCache.Init(db, 20)
-// newCache.AddrQueue.PrintQueue()
-// newCache.LeasesCache.PrintCache()
-
-// return &Server{
-// 	conn:       conn,
-// 	handle:     handle,
-// 	serverIP:   serverIP.IP,
-// 	serverMAC:  iface.HardwareAddr,
-// 	config:     config,
-// 	optionsMap: optionsMap,
-// 	db:         db,
-// 	cache:      newCache,
-
-// 	network: network,
-
-// 	workerPool: make(chan struct{}, numWorkers),
-// 	packetch:   make(chan packetJob, 1000), // Can hold 1000 packets
-// 	ipch:       make(chan net.IP),
-// 	sendch:     make(chan []byte, 1000), // Can hold 1000 queued packets to be sent
-// 	quitch:     make(chan struct{}),
-// }, nil

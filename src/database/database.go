@@ -9,7 +9,6 @@ import (
 type PersistentHandler interface {
 	Connect() error
 	CreateLeasesTable(db *sql.DB) error
-	ConnectDatabase() (*sql.DB, error)
 	IsIPAvailable(ip net.IP) bool
 	IsMACLeased(mac net.HardwareAddr) net.IP
 	LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen time.Duration, leasedOn time.Time) error

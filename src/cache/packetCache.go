@@ -82,10 +82,12 @@ func (p *PacketCache) Clean() {
 }
 
 func (p *PacketCache) CleanJob(frequency int) {
-	freqTime := time.Duration(time.Second * time.Duration(frequency))
+	go func() {
+		freqTime := time.Duration(time.Second * time.Duration(frequency))
 
-	for {
-		time.Sleep(freqTime)
-		p.Clean()
-	}
+		for {
+			time.Sleep(freqTime)
+			p.Clean()
+		}
+	} ()
 }

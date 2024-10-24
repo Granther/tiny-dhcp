@@ -93,11 +93,14 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 }
 
 func (s *Server) buildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer *layers.DHCPv4) (*gopacket.SerializeBuffer, error) {
+	serverIP := s.network.ServerIP()
+	serverMac := s.network.ServerMac()
+
 	buf := gopacket.NewSerializeBuffer()
 	var layersToSerialize []gopacket.SerializableLayer
 
 	ethernetLayer := &layers.Ethernet{
-		SrcMAC:       s.serverMAC,
+		SrcMAC:       serverMac,
 		DstMAC:       dstMAC,
 		EthernetType: layers.EthernetTypeIPv4,
 	}
@@ -106,8 +109,8 @@ func (s *Server) buildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer
 	ipLayer := &layers.IPv4{
 		Version:  4,
 		TTL:      64,
-		SrcIP:    s.serverIP, // We always respond on the DHCP ip
-		DstIP:    dstIP,      // We set the Dest to that of the offered IP
+		SrcIP:    serverIP, // We always respond on the DHCP ip
+		DstIP:    dstIP,    // We set the Dest to that of the offered IP
 		Protocol: layers.IPProtocolUDP,
 	}
 	layersToSerialize = append(layersToSerialize, ipLayer)
@@ -446,8 +449,11 @@ func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net
 }
 
 func (s *Server) sendARPRequest(dstIP net.IP) {
+	serverMac := s.network.ServerMac()
+	serverIP := s.network.ServerIP()
+
 	ethLayer := &layers.Ethernet{
-		SrcMAC:       srcMAC,
+		SrcMAC:       serverMac,
 		DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 		EthernetType: layers.EthernetTypeARP,
 	}
@@ -456,8 +462,8 @@ func (s *Server) sendARPRequest(dstIP net.IP) {
 		AddrType:          layers.LinkTypeEthernet,
 		Protocol:          layers.EthernetTypeIPv4,
 		Operation:         layers.ARPRequest,
-		SourceHwAddress:   srcMAC,
-		SourceProtAddress: srcIP.To4(),
+		SourceHwAddress:   serverMac,
+		SourceProtAddress: serverIP.To4(),
 		DstHwAddress:      []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // Unknown
 		DstProtAddress:    dstIP.To4(),
 		HwAddressSize:     6,
@@ -482,7 +488,8 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
 	// Use a timeout mechanism (1 second) with time.After
 	timeout := time.After(1 * time.Second)
 
-	packetSource := gopacket.NewPacketSource(s.handle, s.handle.LinkType())
+	handle := s.network.Handle()
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 
 	for {
 		select {

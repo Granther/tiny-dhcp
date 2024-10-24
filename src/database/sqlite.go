@@ -24,7 +24,7 @@ func NewSQLiteManager() PersistentHandler {
 func (s *SQLiteManager) Connect() error {
 	db, err := s.ConnectDatabase()
 	if err != nil {
-		return fmt.Errorf("error occured when connecting to db object: %v", err)
+		return fmt.Errorf("error occured when connecting to db: %w", err)
 	}
 	s.db = db
 

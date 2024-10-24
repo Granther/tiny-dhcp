@@ -8,7 +8,7 @@ import (
 )
 
 type AddrQueueHandler interface {
-	FillQueue(num int) error
+	FillQueue() error
 	DeQueue() bool
 	EnQueue(val net.IP) bool
 	Front() net.IP
@@ -123,7 +123,7 @@ func (q *AddrQueue) PrintQueue() {
 	}
 }
 
-func (q *AddrQueue) FillQueue(num int) error {
+func (q *AddrQueue) FillQueue() error {
 	// While new addrs list < num
 	// Generate addr from bottom of thing, if in cache or in queue, skip
 	// else, add
@@ -134,11 +134,12 @@ func (q *AddrQueue) FillQueue(num int) error {
 	// Clear Queue, fuck it
 	q.Empty()
 
+	max := q.space
 	var newAddrs []net.IP
 	startIP := net.ParseIP(q.addrPool[0])
 	endIP := net.ParseIP(q.addrPool[1])
 
-	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < num; ip = utils.IncrementIP(ip) {
+	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < max; ip = utils.IncrementIP(ip) {
 		ok := q.leaseCache.IsIPAvailable(ip)
 		if !ok { // Doesnt exist in leases
 			newAddrs = append(newAddrs, ip)
