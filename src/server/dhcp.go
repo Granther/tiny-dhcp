@@ -69,17 +69,17 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 	dhcpOptions = append(dhcpOptions, msgTypeOption)
 	// Iterate over Request List, get option requested
 	for _, req := range requestList.Data {
-		if s.optionsMap[layers.DHCPOpt(req)] == nil {
-			continue
-		}
-		r := s.optionsMap[layers.DHCPOpt(req)].ToBytes()
-		if r == nil {
+		val, ok := s.options.Get(layers.DHCPOpt(req))
+		if !ok { // Option value does not exist, server cannot fufill
 			continue
 		}
 
-		op := layers.NewDHCPOption(layers.DHCPOpt(req), r)
+		op := layers.NewDHCPOption(layers.DHCPOpt(req), val.ToBytes())
 		dhcpOptions = append(dhcpOptions, op)
 	}
+
+	// leaseLen, ok := s.options.Get(layers.DHCPOptLeaseTime); if !ok {
+	// }
 
 	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
 	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.network.serverIP.To4())
@@ -141,7 +141,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 			offeredIP = requestedIP.Data
 		} else {
 			var err error
-			offeredIP, err = s.GenerateIP(s.db, &s.config)
+			offeredIP, err = s.GenerateIP()
 			if err != nil {
 				return fmt.Errorf("failed to generate ip: %w", err)
 			}
@@ -158,7 +158,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 		return err
 	}
 
-	s.cache.PacketCache.Set(string(dhcpLayer.Xid), offerLayer)
+	s.packet.Set(string(dhcpLayer.Xid), offerLayer)
 	slog.Info("Offering Ip to client", "ip", offeredIP, "mac", clientMAC.String())
 	s.network.SubmitBytes((*packetPtr).Bytes())
 
@@ -191,7 +191,7 @@ func (s *Server) constructOfferLayer(discoverLayer *layers.DHCPv4, offeredIP net
 }
 
 func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
-	prevPacket := s.cache.PacketCache.Get(string(dhcpLayer.Xid))
+	prevPacket := s.packet.Get(string(dhcpLayer.Xid))
 
 	requestedIPOpt, requestedOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
 	serverIdentOpt, serverIdOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptServerID)
@@ -264,12 +264,12 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 
 	if requestType == "selecting" {
 		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
-		if ok && s.cache.IsIPAvailable(requestedIPOpt.Data) {
+		if ok && s.lease.IsIPAvailable(requestedIPOpt.Data) {
 			// Remove from Queue
-			s.cache.AddrQueue.DeQueue()
+			s.addr.DeQueue()
 
 			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
-			err := s.cache.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
+			err := s.lease.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
 			if err != nil {
 				return fmt.Errorf("unable to create lease for requested ip: %w", err)
 			}
@@ -278,7 +278,7 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 			goto NACK
 		}
 	} else if requestType == "init" {
-		oldIP := s.cache.IsMACLeased(clientMAC)
+		oldIP := s.lease.IsMACLeased(clientMAC)
 		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
 
 		slog.Debug("Request Init", "OldIP", oldIP.String(), "Reqip", net.IP(requestedIPOpt.Data).String())
@@ -296,13 +296,13 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 			goto NACK
 		}
 	} else if requestType == "renewing" {
-		currentIP := s.cache.IsMACLeased(clientMAC)
+		currentIP := s.lease.IsMACLeased(clientMAC)
 		if currentIP != nil {
 			// if dhcpLayer.ClientIP.Equal(currentIP) {
 			// slog.Debug("Mac is assigned to current ip, renewing")
 			// Renew the ip lease
 			slog.Debug("CurrentIP isnt nil, renewing...")
-			err := s.cache.LeaseIP(requestedIP, clientMAC, s.config.DHCP.LeaseLen)
+			err := s.lease.LeaseIP(requestedIP, clientMAC, s.config.DHCP.LeaseLen)
 			if err != nil {
 				return fmt.Errorf("unable to renew lease for requested ip: %w", err)
 			}
@@ -408,13 +408,13 @@ func (s *Server) processInform(dhcpLayer *layers.DHCPv4) error {
 func (s *Server) processRelease(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
 	if clientMAC != nil {
-		s.cache.UnleaseMAC(clientMAC)
+		s.lease.UnleaseMAC(clientMAC)
 		return nil
 	}
 
 	clientIP := dhcpLayer.ClientIP
 	if clientIP != nil {
-		s.cache.UnleaseIP(clientIP)
+		s.lease.UnleaseIP(clientIP)
 		return nil
 	}
 
@@ -445,7 +445,7 @@ func (s *Server) constructInformLayer(requestLayer *layers.DHCPv4, offeredIP net
 	return dhcpLayer, nil
 }
 
-func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) {
+func (s *Server) sendARPRequest(dstIP net.IP) {
 	ethLayer := &layers.Ethernet{
 		SrcMAC:       srcMAC,
 		DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
@@ -477,7 +477,7 @@ func (s *Server) sendARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) {
 
 func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
 	// Send the ARP request
-	s.sendARPRequest(s.serverMAC, s.serverIP, targetIP)
+	s.sendARPRequest(targetIP)
 
 	// Use a timeout mechanism (1 second) with time.After
 	timeout := time.After(1 * time.Second)

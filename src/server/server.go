@@ -139,7 +139,7 @@ func (s *Server) HandleDHCPPacket(packetSlice []byte) error {
 }
 
 func (s *Server) GenerateIP(db *sql.DB) (net.IP, error) {
-	ip := s.cache.AddrQueue.Front()
+	ip := s.addr.Front()
 	if !s.IsOccupiedStatic(ip) {
 		return ip, nil
 	}

@@ -15,6 +15,10 @@ type NetworkHandler interface {
 	SendPackets()
 	SendPacket(packet []byte) error
 	SubmitBytes(data []byte)
+	Conn() *net.UDPConn
+	Handle() *pcap.Handle
+	ServerIP() net.IP
+	ServerMac() net.HardwareAddr
 	Close()
 }
 
@@ -118,3 +122,11 @@ func (n *NetworkManager) Close() {
 func (n *NetworkManager) SubmitBytes(data []byte) {
 	n.sendch <- data
 }
+
+func (n *NetworkManager) Conn() *net.UDPConn { return n.conn }
+
+func (n *NetworkManager) Handle() *pcap.Handle { return n.handle }
+
+func (n *NetworkManager) ServerIP() net.IP { return n.serverIP }
+
+func (n *NetworkManager) ServerMac() net.HardwareAddr { return n.serverMac }
