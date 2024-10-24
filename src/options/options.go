@@ -14,7 +14,7 @@ import (
 // Options handler impl only has to impl CreateOptionsMap
 type OptionsHandler interface {
 	Create()
-	Get(layers.DHCPOpt) DHCPOptionValue
+	Get(layerType layers.DHCPOpt) (DHCPOptionValue, bool)
 }
 
 type OptionsManager struct {
@@ -121,8 +121,12 @@ func (o *OptionsManager) GetClasslessSR() DHCPOptionValue {
 	return ClasslessStaticRoute(option)
 }
 
-func Get(layers.DHCPOpt) DHCPOptionValue {
-
+func (o *OptionsManager) Get(layerType layers.DHCPOpt) (DHCPOptionValue, bool) {
+	val, ok := o.options[layerType]
+	if !ok {
+		return nil, false
+	}
+	return val, true
 }
 
 func (o *OptionsManager) Create() {
