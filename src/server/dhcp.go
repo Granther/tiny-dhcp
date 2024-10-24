@@ -131,9 +131,9 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
 
 	// Checks wether the addr exists, expired or not
-	offeredIP := s.storage.IsMACLeased(clientMAC)
+	offeredIP := s.lease.IsMACLeased(clientMAC)
 	if offeredIP != nil {
-		slog.Debug("MAC is already leased, offering old addr", "oldip", offeredIP.String())
+		slog.Debug("MAC is already leased, offering old addr", "ip", offeredIP.String())
 	} else {
 		requestedIP, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
 		if ok && s.storage.IsIPAvailable(requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {

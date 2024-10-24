@@ -21,10 +21,10 @@ type Server struct {
 	config     *config.Config
 	storage    database.PersistentHandler
 	network    NetworkHandler
-	leaseCache cache.LeaseCacheHandler
+	lease      cache.LeaseCacheHandler
+	addr       cache.AddrQueue
 	packet     cache.PacketHandler
 	options    options.OptionsHandler
-	cache      cache.CacheHandler
 	workerPool WorkerPoolHandler
 	quitch     chan struct{}
 }
@@ -62,7 +62,6 @@ func NewServer(serverConfig *config.Config) (*Server, error) {
 		packet:     packet,
 		storage:    storage,
 		options:    options,
-		// cache:      cache,
 	}
 
 	return server, nil
