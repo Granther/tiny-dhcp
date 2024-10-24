@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -78,11 +77,13 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 		dhcpOptions = append(dhcpOptions, op)
 	}
 
-	// leaseLen, ok := s.options.Get(layers.DHCPOptLeaseTime); if !ok {
-	// }
+	leaseLen, ok := s.options.Get(layers.DHCPOptLeaseTime)
+	if !ok {
+		return nil, false
+	}
 
-	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, s.optionsMap[layers.DHCPOptLeaseTime].ToBytes())
-	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.network.serverIP.To4())
+	dhcpLeaseTime := layers.NewDHCPOption(layers.DHCPOptLeaseTime, leaseLen.ToBytes())
+	dhcpServerIP := layers.NewDHCPOption(layers.DHCPOptServerID, s.network.ServerIP().To4())
 	endOptions := layers.NewDHCPOption(layers.DHCPOptEnd, []byte{})
 
 	dhcpOptions = append(dhcpOptions, dhcpLeaseTime)
@@ -200,7 +201,7 @@ func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 	serverIdentOpt, serverIdOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptServerID)
 
 	if prevPacket != nil {
-		if serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.serverIP) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) && prevPacket.YourClientIP.Equal(net.IP(requestedIPOpt.Data)) {
+		if serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.network.ServerIP()) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) && prevPacket.YourClientIP.Equal(net.IP(requestedIPOpt.Data)) {
 			return "selecting", nil
 		}
 	} else if !serverIdOpOk && requestedOpOk && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
@@ -477,42 +478,4 @@ func (s *Server) sendARPRequest(dstIP net.IP) {
 
 	slog.Info(fmt.Sprintf("Sending arp request to IP: %v", dstIP.String()))
 	s.network.SubmitBytes(buf.Bytes())
-
-	return
-}
-
-func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
-	// Send the ARP request
-	s.sendARPRequest(targetIP)
-
-	// Use a timeout mechanism (1 second) with time.After
-	timeout := time.After(1 * time.Second)
-
-	handle := s.network.Handle()
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
-	for {
-		select {
-		case <-timeout:
-			slog.Debug("Timeout reached, stopping waiting for ARP reply..")
-			return false
-
-		default:
-			packet, err := packetSource.NextPacket() // Get the next packet
-			if err != nil {
-				slog.Error("Error reading arp packet", "error", err)
-				continue
-			}
-
-			arpLayer := packet.Layer(layers.LayerTypeARP)
-			if arpLayer != nil {
-				arp := arpLayer.(*layers.ARP)
-
-				if arp.Operation == layers.ARPReply && net.IP(arp.SourceProtAddress).Equal(targetIP) {
-					slog.Debug(fmt.Sprintf("Received ARP reply from %v: MAC %v", targetIP, net.HardwareAddr(arp.SourceHwAddress)))
-					return true
-				}
-			}
-		}
-	}
 }

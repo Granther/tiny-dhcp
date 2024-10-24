@@ -68,10 +68,12 @@ func (q *AddrQueue) Empty() {
 }
 
 func (q *AddrQueue) Front() net.IP {
-	if q.isEmpty() {
-		return nil
+	ip := q.ReadFront()
+	if ip != nil {
+		q.FrontToEnd()
+		return ip
 	}
-	return q.left.next.val
+	return nil
 }
 
 func (q *AddrQueue) Rear() net.IP {
@@ -102,6 +104,13 @@ func (q *AddrQueue) DeQueue() bool {
 	q.space += 1
 
 	return true
+}
+
+func (q *AddrQueue) ReadFront() net.IP {
+	if q.isEmpty() {
+		return nil
+	}
+	return q.left.next.val
 }
 
 func (q *AddrQueue) FrontToEnd() {

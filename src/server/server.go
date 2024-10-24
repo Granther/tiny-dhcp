@@ -1,11 +1,9 @@
 package server
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
-	"net"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -13,37 +11,36 @@ import (
 	"gdhcp/cache"
 	"gdhcp/config"
 	"gdhcp/database"
+	"gdhcp/network"
 	"gdhcp/options"
 	"gdhcp/utils"
+	"gdhcp/worker"
 )
 
 type Server struct {
 	config     *config.Config
 	storage    database.PersistentHandler
-	network    NetworkHandler
+	network    network.NetworkHandler
 	lease      cache.LeaseCacheHandler
 	addr       cache.AddrQueueHandler
 	packet     cache.PacketHandler
 	options    options.OptionsHandler
-	workerPool WorkerPoolHandler
+	workerPool worker.WorkerPoolHandler
 	quitch     chan struct{}
 }
 
 func NewServer(serverConfig *config.Config) (*Server, error) {
 	// Worker layer, where processing is done
-	workerPool := NewWorkerPool(serverConfig.Server.NumWorkers)
+	workerPool := worker.NewWorkerPool(serverConfig.Server.NumWorkers)
 
 	// Network layer, where the network is listened to
-	network, err := NewNetworkManager(workerPool, serverConfig)
+	network, err := network.NewNetworkManager(workerPool, serverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
 
 	// Storage layer, where external persistent data is stored
 	storage := database.NewSQLiteManager()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage module for server instantiation: %w", err)
-	}
 
 	packet := cache.NewPacketCache(20, 20)
 	lease := cache.NewLeaseCache(storage)
@@ -84,7 +81,7 @@ func (s *Server) Start() error {
 
 	// Begin listening for new jobs
 	// Do this last as we MUST be ready
-	go s.network.ReceivePackets(s)
+	go s.network.ReceivePackets(s.HandleDHCPPacket)
 	go s.network.SendPackets()
 
 	slog.Info("Server is now listening for packets/quitch")
@@ -148,13 +145,4 @@ func (s *Server) HandleDHCPPacket(packetSlice []byte) error {
 	}
 
 	return nil
-}
-
-func (s *Server) GenerateIP(db *sql.DB) (net.IP, error) {
-	ip := s.addr.Front()
-	if !s.IsOccupiedStatic(ip) {
-		return ip, nil
-	}
-
-	return nil, fmt.Errorf("unable to generate ip addr, pool full?")
 }

@@ -25,7 +25,7 @@ func main() {
 	jsonConfig := config.NewJSONConfigManager(".")
 	config, err := jsonConfig.ReadConfig()
 	if err != nil {
-		slog.Error("Error parsing config file: %w", err)
+		slog.Error("Error parsing config file", "error", err)
 		os.Exit(1)
 	}
 
@@ -33,7 +33,7 @@ func main() {
 
 	server, err := server.NewServer(&config)
 	if err != nil {
-		slog.Error("error occured while instantiating server: %w", err)
+		slog.Error("Error occured while instantiating server", "error", err)
 		os.Exit(1)
 	}
 	server.Start()

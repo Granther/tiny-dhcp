@@ -31,10 +31,11 @@ type LeaseCache struct {
 }
 
 type LeaseNode struct {
-	ip       net.IP
-	mac      net.HardwareAddr
-	leaseLen time.Duration
-	leasedOn time.Time
+	ip        net.IP
+	mac       net.HardwareAddr
+	leaseLen  time.Duration
+	leasedOn  time.Time
+	lockedXid string
 }
 
 func NewLeaseCache(storage database.PersistentHandler) LeaseCacheHandler {
