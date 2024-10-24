@@ -5,7 +5,6 @@ import (
 	"gdhcp/utils"
 	"log/slog"
 	"net"
-	"time"
 )
 
 type AddrQueueHandler interface {
@@ -22,20 +21,24 @@ type ListNode struct {
 }
 
 type AddrQueue struct {
-	space int
-	left  *ListNode
-	right *ListNode
+	space      int
+	addrPool   []string
+	leaseCache LeaseCacheHandler
+	left       *ListNode
+	right      *ListNode
 }
 
-func NewAddrQueue(max int) AddrQueueHandler {
+func NewAddrQueue(max int, addrPool []string, leaseCache LeaseCacheHandler) AddrQueueHandler {
 	left := NewListNode(nil, nil, nil)
 	right := NewListNode(nil, left, nil)
 	left.next = right
 
 	return &AddrQueue{
-		space: max,
-		left:  left,
-		right: right,
+		space:      max,
+		addrPool:   addrPool,
+		leaseCache: leaseCache,
+		left:       left,
+		right:      right,
 	}
 }
 
@@ -120,35 +123,6 @@ func (q *AddrQueue) PrintQueue() {
 	}
 }
 
-func (q *AddrQueue) ReadLeasesFromDB() error {
-	// Read leases from db
-	// Build leasenode object
-	// Add to mac and ip cache
-	leases, err := q.Storage.GetLeases()
-	if err != nil {
-		return err
-	}
-
-	for _, lease := range leases {
-		mac, err := net.ParseMAC(lease.MAC)
-		if err != nil {
-			return fmt.Errorf("unable to extract mac from database lease: %v", err)
-		}
-
-		leasedOn, err := time.Parse("2006-01-02 15:04:05", lease.LeasedOn)
-		if err != nil {
-			return fmt.Errorf("unable to parse str time from db to time: %v", err)
-		}
-
-		ip := net.ParseIP(lease.IP)
-
-		leaseNode := NewLeaseNode(ip, mac, time.Duration(lease.LeaseLen), leasedOn)
-		q.LeasesCache.Put(leaseNode)
-	}
-
-	return nil
-}
-
 func (q *AddrQueue) FillQueue(num int) error {
 	// While new addrs list < num
 	// Generate addr from bottom of thing, if in cache or in queue, skip
@@ -161,12 +135,12 @@ func (q *AddrQueue) FillQueue(num int) error {
 	q.Empty()
 
 	var newAddrs []net.IP
-	startIP := net.ParseIP(q.AddrPool[0])
-	endIP := net.ParseIP(q.AddrPool[1])
+	startIP := net.ParseIP(q.addrPool[0])
+	endIP := net.ParseIP(q.addrPool[1])
 
 	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < num; ip = utils.IncrementIP(ip) {
-		val := q.LeasesCache.IPGet(ip)
-		if val == nil { // Doesnt exist in leases
+		ok := q.leaseCache.IsIPAvailable(ip)
+		if !ok { // Doesnt exist in leases
 			newAddrs = append(newAddrs, ip)
 		}
 	}

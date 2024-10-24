@@ -22,7 +22,7 @@ type Server struct {
 	storage    database.PersistentHandler
 	network    NetworkHandler
 	lease      cache.LeaseCacheHandler
-	addr       cache.AddrQueue
+	addr       cache.AddrQueueHandler
 	packet     cache.PacketHandler
 	options    options.OptionsHandler
 	workerPool WorkerPoolHandler
@@ -39,19 +39,15 @@ func NewServer(serverConfig *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to create network module for server instantiation: %w", err)
 	}
 
-	// Packet layer, where packets are assembled for sending
-	packet, err := NewPacketManager(network, serverConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create packet handler module for server instantiation: %w", err)
-	}
-
 	// Storage layer, where external persistent data is stored
 	storage := database.NewSQLiteManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage module for server instantiation: %w", err)
 	}
 
-	// cache := cache.NewCacheManager(storage, serverConfig)
+	packet := cache.NewPacketCache(20, 20)
+	lease := cache.NewLeaseCache(storage)
+	addr := cache.NewAddrQueue(20, serverConfig.DHCP.AddrPool, lease)
 
 	options := options.NewOptionsManager(serverConfig)
 
@@ -60,6 +56,8 @@ func NewServer(serverConfig *config.Config) (*Server, error) {
 		workerPool: workerPool,
 		network:    network,
 		packet:     packet,
+		lease:      lease,
+		addr:       addr,
 		storage:    storage,
 		options:    options,
 	}

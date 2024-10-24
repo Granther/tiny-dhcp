@@ -21,6 +21,7 @@ type LeaseCacheHandler interface {
 	UnleaseIP(ip net.IP)
 	Unlease(node *LeaseNode)
 	LeaseIP(ip net.IP, mac net.HardwareAddr, leaseLen int) error
+	ReadLeasesFromPersistent() error
 }
 
 type LeaseCache struct {
@@ -36,7 +37,7 @@ type LeaseNode struct {
 	leasedOn time.Time
 }
 
-func NewLeaseCache(storage database.PersistentHandler, max int) LeaseCacheHandler {
+func NewLeaseCache(storage database.PersistentHandler) LeaseCacheHandler {
 	ipCache := make(map[[16]byte]*LeaseNode)
 	macCache := make(map[string]*LeaseNode)
 
@@ -154,4 +155,33 @@ func (l *LeaseCache) IsMACLeased(mac net.HardwareAddr) net.IP {
 	}
 
 	return node.ip
+}
+
+func (q *LeaseCache) ReadLeasesFromPersistent() error {
+	// Read leases from db
+	// Build leasenode object
+	// Add to mac and ip cache
+	leases, err := q.storage.GetLeases()
+	if err != nil {
+		return err
+	}
+
+	for _, lease := range leases {
+		mac, err := net.ParseMAC(lease.MAC)
+		if err != nil {
+			return fmt.Errorf("unable to extract mac from database lease: %v", err)
+		}
+
+		leasedOn, err := time.Parse("2006-01-02 15:04:05", lease.LeasedOn)
+		if err != nil {
+			return fmt.Errorf("unable to parse str time from db to time: %v", err)
+		}
+
+		ip := net.ParseIP(lease.IP)
+
+		leaseNode := NewLeaseNode(ip, mac, time.Duration(lease.LeaseLen), leasedOn)
+		q.Put(leaseNode)
+	}
+
+	return nil
 }

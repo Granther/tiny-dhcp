@@ -136,7 +136,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 		slog.Debug("MAC is already leased, offering old addr", "ip", offeredIP.String())
 	} else {
 		requestedIP, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
-		if ok && s.storage.IsIPAvailable(requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
+		if ok && s.lease.IsIPAvailable(requestedIP.Data) && !s.IsOccupiedStatic(requestedIP.Data) {
 			slog.Debug("Using requested IP from Discover", "ip", requestedIP.Data)
 			offeredIP = requestedIP.Data
 		} else {
