@@ -6,10 +6,7 @@
 - I wanted to host a dedicated DHCP server in my homelab, I realize there are not many homelab friendly projects that allow me to do this
 
 ### Why is it Tiny?
-- Well, it doesn't do any fancy vendor specific stuff
-
-### RCFC?
-- Nope, I'm not writing the server in complete accordance with RCFC's DHCP docs 
+- Because its a 'no bullshit' server, does its job
 
 ### The Low Down
 - The server uses a Worker pool to accept, process and send.
