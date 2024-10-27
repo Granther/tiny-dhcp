@@ -234,11 +234,13 @@ func (s *Server) sendARPRequest(dstIP net.IP) {
 func (s *Server) getRequestType(dhcpLayer *layers.DHCPv4) (string, error) {
 	prevPacket := s.packet.Get(string(dhcpLayer.Xid))
 
-	requestedIPOpt, requestedOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
+	// requestedIPOpt
+	_, requestedOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
 	serverIdentOpt, serverIdOpOk := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptServerID)
 
 	if prevPacket != nil {
-		if serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.network.ServerIP()) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) && prevPacket.YourClientIP.Equal(net.IP(requestedIPOpt.Data)) {
+		if serverIdOpOk && requestedOpOk && net.IP(serverIdentOpt.Data).Equal(s.network.ServerIP()) && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
+		//&& prevPacket.YourClientIP.Equal(net.IP(requestedIPOpt.Data)) {
 			return "selecting", nil
 		}
 	} else if !serverIdOpOk && requestedOpOk && dhcpLayer.ClientIP.Equal(net.IP{0, 0, 0, 0}) {
