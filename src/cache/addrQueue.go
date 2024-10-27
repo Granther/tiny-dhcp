@@ -141,6 +141,8 @@ func (q *AddrQueue) FillQueue() error {
 	// If it has been longer than val.lease len since val.leased on, expired, add to back of queue as available
 
 	// Clear Queue, fuck it
+	slog.Debug("Filling addr queue...")
+
 	q.Empty()
 
 	max := q.space
@@ -151,6 +153,7 @@ func (q *AddrQueue) FillQueue() error {
 	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < max; ip = utils.IncrementIP(ip) {
 		ok := q.leaseCache.IsIPAvailable(ip)
 		if !ok { // Doesnt exist in leases
+			slog.Debug("IP avail")
 			newAddrs = append(newAddrs, ip)
 		}
 	}
@@ -162,6 +165,8 @@ func (q *AddrQueue) FillQueue() error {
 			slog.Debug("Wasn't able to add all addrs to queue, maybe full")
 		}
 	}
+
+	q.PrintQueue()
 
 	return nil
 }

@@ -153,8 +153,7 @@ func (s *Server) createOffer(dhcpLayer *layers.DHCPv4) error {
 			slog.Debug("Using requested IP from Discover", "ip", requestedIP.Data)
 			offeredIP = requestedIP.Data
 		} else {
-			var err error
-			offeredIP, err = s.GenerateIP()
+			offeredIP, err := s.GenerateIP()
 			if err != nil {
 				return fmt.Errorf("failed to generate ip: %w", err)
 			}

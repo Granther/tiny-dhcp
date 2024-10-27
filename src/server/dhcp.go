@@ -51,6 +51,10 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 
+	// If requested IP is available or leased to that mac, send ACK
+	// 
+
+	// I dont think this logic is working, YOLO
 	requestType, err := s.getRequestType(dhcpLayer)
 	if err != nil {
 		return err

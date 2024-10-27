@@ -146,7 +146,7 @@ func (l *LeaseCache) UnleaseMAC(mac net.HardwareAddr) {
 }
 
 func (l *LeaseCache) IsIPAvailable(ip net.IP) bool {
-	return l.IPGet(ip) == nil
+	return l.IPGet(ip) != nil
 }
 
 func (l *LeaseCache) IsMACLeased(mac net.HardwareAddr) net.IP {
