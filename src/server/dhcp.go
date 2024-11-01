@@ -60,6 +60,12 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 		return err
 	}
 
+	/*
+	
+
+
+	*/
+
 	slog.Debug("Request type", "type", requestType)
 
 	clientMAC := dhcpLayer.ClientHWAddr
@@ -86,16 +92,18 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 
 		slog.Debug("Request Init", "OldIP", oldIP.String(), "Reqip", net.IP(requestedIPOpt.Data).String())
 
-		if oldIP != nil && ok {
+		if oldIP != nil && ok { // Give client thier original IP
 			if oldIP.Equal(net.IP(requestedIPOpt.Data)) {
 				slog.Debug("Mac is assigned to requested ip")
 				requestedIP = oldIP
-			} else {
+			} else if s.lease.IsIPAvailable(requestedIP) { // Give client their requested IP if available
+				
+			} else { // OldIP != requestedIP,  is requested IP available			
 				slog.Debug("oldIP does not equal requested ip", "requestedIP", requestedIP.String())
 				goto NACK
 			}
 		} else {
-			slog.Debug("Requested IP is not available, sending Nack")
+			slog.Debug("Requested IP is not available, sending Nack") // We should try to
 			goto NACK
 		}
 	} else if requestType == "renewing" {
