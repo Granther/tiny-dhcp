@@ -12,4 +12,4 @@
 - Nope, I'm not writing the server in complete accordance with RCFC's DHCP docs 
 
 ### The Low Down
-- The server uses a Worker pool to accept, process and send.
+- The server uses a Worker pool to accept and send.
