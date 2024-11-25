@@ -65,6 +65,7 @@ func (l *LeaseCache) Put(newNode *LeaseNode) {
 }
 
 func (l *LeaseCache) IPGet(ip net.IP) *LeaseNode {
+	
 	ipBytes := utils.IpTo16(ip)
 	val, ok := l.ipCache[*ipBytes]
 	if ok {

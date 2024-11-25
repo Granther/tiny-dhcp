@@ -43,7 +43,7 @@ func NewServer(serverConfig *config.Config) (*Server, error) {
 	storage := database.NewSQLiteManager()
 
 	packet := cache.NewPacketCache(20, 20)
-	lease := cache.NewLeaseCache(storage)
+	lease := cache.NewPersistentCache(storage)
 	addr := cache.NewAddrQueue(20, serverConfig.DHCP.AddrPool, lease)
 
 	options := options.NewOptionsManager(serverConfig)

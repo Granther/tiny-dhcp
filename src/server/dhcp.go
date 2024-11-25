@@ -64,22 +64,22 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	clientMAC := dhcpLayer.ClientHWAddr
 	requestedIP := net.IP{0, 0, 0, 0}
 
-	requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
-	if ok { 
-	//&& s.lease.IsIPAvailable(requestedIPOpt.Data) {
-		// Remove from Queue
-		// s.addr.DeQueue()
-
-		slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
-		err := s.lease.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
-		if err != nil {
-			return fmt.Errorf("unable to create lease for requested ip: %w", err)
-		}
-		requestedIP = requestedIPOpt.Data
-	} else if !ok {
-		slog.Debug("Client wants old IP back")
+	oldIP := s.lease.IsMACLeased(clientMAC) 
+	if oldIP != nil {
+		slog.Debug("Client has a leased addr", "oldip", oldIP.String())
+		requestedIP = oldIP
 	} else {
-		slog.Debug("unk")
+		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
+		if ok && s.lease.IsIPAvailable(requestedIPOpt.Data) {
+			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
+			err := s.lease.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
+			if err != nil {
+				return fmt.Errorf("unable to create lease for requested ip: %w", err)
+			}
+			requestedIP = requestedIPOpt.Data
+		} else {
+			slog.Debug("unk")
+		}
 	}
 
 	// if requestType == "selecting" {
