@@ -50,98 +50,109 @@ func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgTyp
 }
 
 func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
-
-	// If requested IP is available or leased to that mac, send ACK
-	// 
-
-	// I dont think this logic is working, YOLO
 	requestType, err := s.getRequestType(dhcpLayer)
 	if err != nil {
 		return err
 	}
 
-	/*
-	
-
-
-	*/
+	// Conditions
+	// Client is new, needs new addr
+	// Client is returning, wants old IP back
 
 	slog.Debug("Request type", "type", requestType)
 
 	clientMAC := dhcpLayer.ClientHWAddr
 	requestedIP := net.IP{0, 0, 0, 0}
 
-	if requestType == "selecting" {
-		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
-		if ok && s.lease.IsIPAvailable(requestedIPOpt.Data) {
-			// Remove from Queue
-			s.addr.DeQueue()
+	requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
+	if ok { 
+	//&& s.lease.IsIPAvailable(requestedIPOpt.Data) {
+		// Remove from Queue
+		// s.addr.DeQueue()
 
-			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
-			err := s.lease.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
-			if err != nil {
-				return fmt.Errorf("unable to create lease for requested ip: %w", err)
-			}
-			requestedIP = requestedIPOpt.Data
-		} else {
-			goto NACK
+		slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
+		err := s.lease.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
+		if err != nil {
+			return fmt.Errorf("unable to create lease for requested ip: %w", err)
 		}
-	} else if requestType == "init" {
-		oldIP := s.lease.IsMACLeased(clientMAC)
-		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
-
-		slog.Debug("Request Init", "OldIP", oldIP.String(), "Reqip", net.IP(requestedIPOpt.Data).String())
-
-		if oldIP != nil && ok { // Give client thier original IP
-			if oldIP.Equal(net.IP(requestedIPOpt.Data)) {
-				slog.Debug("Mac is assigned to requested ip")
-				requestedIP = oldIP
-			} else if s.lease.IsIPAvailable(requestedIP) { // Give client their requested IP if available
-				
-			} else { // OldIP != requestedIP,  is requested IP available			
-				slog.Debug("oldIP does not equal requested ip", "requestedIP", requestedIP.String())
-				goto NACK
-			}
-		} else {
-			slog.Debug("Requested IP is not available, sending Nack") // We should try to
-			goto NACK
-		}
-	} else if requestType == "renewing" {
-		currentIP := s.lease.IsMACLeased(clientMAC)
-		if currentIP != nil {
-			// if dhcpLayer.ClientIP.Equal(currentIP) {
-			// slog.Debug("Mac is assigned to current ip, renewing")
-			// Renew the ip lease
-			slog.Debug("CurrentIP isnt nil, renewing...")
-			err := s.lease.LeaseIP(requestedIP, clientMAC, s.config.DHCP.LeaseLen)
-			if err != nil {
-				return fmt.Errorf("unable to renew lease for requested ip: %w", err)
-			}
-			requestedIP = currentIP
-		} else {
-			slog.Debug("Client is trying to renew, but it not know by this server, sending NACK")
-			err := s.createNack(dhcpLayer)
-			if err != nil {
-				return fmt.Errorf("error sending nack in response to request")
-			}
-			return nil
-		}
+		requestedIP = requestedIPOpt.Data
+	} else if !ok {
+		slog.Debug("Client wants old IP back")
 	} else {
-		slog.Warn("Request type did not fit, dropping packet")
-		return nil
+		slog.Debug("unk")
 	}
+
+	// if requestType == "selecting" {
+	// 	requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
+	// 	if ok && s.lease.IsIPAvailable(requestedIPOpt.Data) {
+	// 		// Remove from Queue
+	// 		s.addr.DeQueue()
+
+	// 		slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
+	// 		err := s.lease.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
+	// 		if err != nil {
+	// 			return fmt.Errorf("unable to create lease for requested ip: %w", err)
+	// 		}
+	// 		requestedIP = requestedIPOpt.Data
+	// 	} else {
+	// 		goto NACK
+	// 	}
+	// } else if requestType == "init" {
+	// 	oldIP := s.lease.IsMACLeased(clientMAC)
+	// 	requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
+
+	// 	slog.Debug("Request Init", "OldIP", oldIP.String(), "Reqip", net.IP(requestedIPOpt.Data).String())
+
+	// 	if oldIP != nil && ok { // Give client thier original IP
+	// 		if oldIP.Equal(net.IP(requestedIPOpt.Data)) {
+	// 			slog.Debug("Mac is assigned to requested ip")
+	// 			requestedIP = oldIP
+	// 		} else if s.lease.IsIPAvailable(requestedIP) { // Give client their requested IP if available
+				
+	// 		} else { // OldIP != requestedIP,  is requested IP available			
+	// 			slog.Debug("oldIP does not equal requested ip", "requestedIP", requestedIP.String())
+	// 			goto NACK
+	// 		}
+	// 	} else {
+	// 		slog.Debug("Requested IP is not available, sending Nack") // We should try to
+	// 		goto NACK
+	// 	}
+	// } else if requestType == "renewing" {
+	// 	currentIP := s.lease.IsMACLeased(clientMAC)
+	// 	if currentIP != nil {
+	// 		// if dhcpLayer.ClientIP.Equal(currentIP) {
+	// 		// slog.Debug("Mac is assigned to current ip, renewing")
+	// 		// Renew the ip lease
+	// 		slog.Debug("CurrentIP isnt nil, renewing...")
+	// 		err := s.lease.LeaseIP(requestedIP, clientMAC, s.config.DHCP.LeaseLen)
+	// 		if err != nil {
+	// 			return fmt.Errorf("unable to renew lease for requested ip: %w", err)
+	// 		}
+	// 		requestedIP = currentIP
+	// 	} else {
+	// 		slog.Debug("Client is trying to renew, but it not know by this server, sending NACK")
+	// 		err := s.createNack(dhcpLayer)
+	// 		if err != nil {
+	// 			return fmt.Errorf("error sending nack in response to request")
+	// 		}
+	// 		return nil
+	// 	}
+	// } else {
+	// 	slog.Warn("Request type did not fit, dropping packet")
+	// 	return nil
+	// }
 
 	if requestedIP.Equal(net.IP{0, 0, 0, 0}) {
 		slog.Debug("Requested IP set to 0.0.0.0")
 	}
 
-	NACK:
-		slog.Debug("Requested IP is not available, sending Nack")
-		err = s.createNack(dhcpLayer)
-		if err != nil {
-			return fmt.Errorf("error sending nack in response to request")
-		}
-		return nil
+	// NACK:
+	// 	slog.Debug("Requested IP is not available, sending Nack")
+	// 	err = s.createNack(dhcpLayer)
+	// 	if err != nil {
+	// 		return fmt.Errorf("error sending nack in response to request")
+	// 	}
+	// 	return nil
 
 	ackLayer, err := s.constructAckLayer(dhcpLayer, requestedIP)
 	if err != nil {
