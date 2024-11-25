@@ -16,6 +16,7 @@ import (
 
 type LeaseCacheHandler interface {
 	IsMACLeased(mac net.HardwareAddr) net.IP
+	PrintCache()
 	IsIPAvailable(ip net.IP) bool
 	UnleaseMAC(mac net.HardwareAddr)
 	UnleaseIP(ip net.IP)
@@ -65,7 +66,7 @@ func (l *LeaseCache) Put(newNode *LeaseNode) {
 }
 
 func (l *LeaseCache) IPGet(ip net.IP) *LeaseNode {
-	
+
 	ipBytes := utils.IpTo16(ip)
 	val, ok := l.ipCache[*ipBytes]
 	if ok {

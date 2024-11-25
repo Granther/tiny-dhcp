@@ -86,6 +86,8 @@ func (s *Server) Start() error {
 
 	slog.Info("Server is now listening for packets/quitch")
 
+	s.lease.PrintCache()
+
 	// Wait for quit signal is recieved on this channel
 	<-s.quitch
 

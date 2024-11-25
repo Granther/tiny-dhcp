@@ -12,6 +12,7 @@ type AddrQueueHandler interface {
 	DeQueue() bool
 	EnQueue(val net.IP) bool
 	Front() net.IP
+	PrintQueue()
 }
 
 type ListNode struct {
@@ -152,7 +153,7 @@ func (q *AddrQueue) FillQueue() error {
 
 	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < max; ip = utils.IncrementIP(ip) {
 		ok := q.leaseCache.IsIPAvailable(ip)
-		if !ok { // Doesnt exist in leases
+		if ok { // Doesnt exist in leases
 			newAddrs = append(newAddrs, ip)
 		}
 	}

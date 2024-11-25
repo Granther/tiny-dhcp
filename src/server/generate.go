@@ -47,9 +47,10 @@ func (s *Server) IsOccupiedStatic(targetIP net.IP) bool {
 }
 
 func (s *Server) GenerateIP() (net.IP, error) {
-	ip := s.addr.Front()         // Moves top addr to end
+	ip := s.addr.Front() // Moves top addr to e
 	if !s.IsOccupiedStatic(ip) { // Not a static
 		return ip, nil
 	}
 	return nil, fmt.Errorf("unable to generate ip addr, pool full?")
 }
+

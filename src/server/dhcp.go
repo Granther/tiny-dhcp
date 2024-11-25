@@ -75,16 +75,40 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	} else {
 		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
 		if ok && s.lease.IsIPAvailable(requestedIPOpt.Data) {
-			slog.Debug(fmt.Sprintf("Looks like its available, using it: %v\n", requestedIPOpt.Data))
+			slog.Debug("Looks like IP is available, using it", "requested ip", requestedIPOpt.Data)
 			err := s.lease.LeaseIP(requestedIPOpt.Data, clientMAC, s.config.DHCP.LeaseLen)
 			if err != nil {
 				return fmt.Errorf("unable to create lease for requested ip: %w", err)
 			}
 			requestedIP = requestedIPOpt.Data
 		} else {
-			slog.Debug("unk")
+			slog.Debug("Requested IP is not available, sending Nack")
+			err = s.createNack(dhcpLayer)
+			if err != nil {
+				return fmt.Errorf("error sending nack in response to request")
+			}
+			return nil
 		}
 	}
+
+	if requestedIP.Equal(net.IP{0, 0, 0, 0}) {
+		slog.Debug("Requested IP set to 0.0.0.0")
+	}
+
+	ackLayer, err := s.constructAckLayer(dhcpLayer, requestedIP)
+	if err != nil {
+		return err
+	}
+	packetPtr, err := s.buildStdPacket(requestedIP, clientMAC, ackLayer)
+	if err != nil {
+		return err
+	}
+	packetBuf := *packetPtr
+
+	slog.Info(fmt.Sprintf("Acking to Ip: %v", requestedIP.String()))
+	s.network.SubmitBytes(packetBuf.Bytes())
+
+	return nil
 
 	// if requestType == "selecting" {
 	// 	requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)
@@ -146,10 +170,6 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	// 	return nil
 	// }
 
-	if requestedIP.Equal(net.IP{0, 0, 0, 0}) {
-		slog.Debug("Requested IP set to 0.0.0.0")
-	}
-
 	// NACK:
 	// 	slog.Debug("Requested IP is not available, sending Nack")
 	// 	err = s.createNack(dhcpLayer)
@@ -157,21 +177,6 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 	// 		return fmt.Errorf("error sending nack in response to request")
 	// 	}
 	// 	return nil
-
-	ackLayer, err := s.constructAckLayer(dhcpLayer, requestedIP)
-	if err != nil {
-		return err
-	}
-	packetPtr, err := s.buildStdPacket(requestedIP, clientMAC, ackLayer)
-	if err != nil {
-		return err
-	}
-	packetBuf := *packetPtr
-
-	slog.Info(fmt.Sprintf("Acking to Ip: %v", requestedIP.String()))
-	s.network.SubmitBytes(packetBuf.Bytes())
-
-	return nil
 }
 
 func (s *Server) processDecline(dhcpLayer *layers.DHCPv4) error {

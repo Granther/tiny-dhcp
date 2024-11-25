@@ -5,6 +5,7 @@ import (
 	"gdhcp/database"
 	"gdhcp/types"
 	"gdhcp/utils"
+	"log/slog"
 	"net"
 	"time"
 )
@@ -64,8 +65,12 @@ func (l *PersistentCache) LeaseExpired(ip net.IP) bool {
 }
 
 func (l *PersistentCache) PrintCache() {
-	for _, val := range l.ipCache {
-		fmt.Printf("IP: %v, MAC: %v\n", val.ip.String(), val.mac.String())
+	leases, err := l.storage.GetLeases()
+	if err != nil {
+		fmt.Println("Error in PrintCache")
+	}
+	for _, lease := range leases {
+		slog.Debug("Leased IP", "IP", lease.IP)
 	}
 }
 
