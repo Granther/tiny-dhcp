@@ -36,9 +36,36 @@ type NetworkManager struct {
 
 // Instantiate new NetworkManager
 func NewNetworkManager(workerPool worker.WorkerPoolHandler, config *config.Config) (NetworkHandler, error) {
-	iface, err := net.InterfaceByName(config.Server.ListenInterface)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get interface by name of %s: %w", config.Server.ListenInterface, err)
+	var iface *net.Interface
+	var err error
+
+	ifaceName := config.Server.ListenInterface
+	if ifaceName == "any" {
+		slog.Debug("Using 'any' interface")
+		ifaces, err := net.Interfaces()
+		if err != nil {
+			return nil, err
+		}
+		for _, ifc := range ifaces {
+			ip, _ := utils.GetInterfaceIP(&ifc)
+			fmt.Println("Ip: ", ip.String())
+			// fmt.Println(ip.Equal(net.ParseIP("127.0.0.1")))
+			// if ip.Equal(net.ParseIP("127.0.0.1")) {
+			// 	fmt.Println("Is local")
+			// } else if ip == nil {
+			// 	fmt.Println("ip nil")
+			// }
+			if ip != nil && !ip.Equal(net.ParseIP("127.0.0.1")) {
+				iface = &ifc
+				slog.Debug("Using interface", "iface", )
+				break
+			}
+		}
+	} else {
+		iface, err = net.InterfaceByName(ifaceName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get interface by name of %s: %w", config.Server.ListenInterface, err)
+		}
 	}
 
 	serverIP, err := utils.GetInterfaceIP(iface)
