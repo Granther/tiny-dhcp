@@ -153,7 +153,6 @@ func (q *AddrQueue) FillQueue() error {
 	for ip := startIP; !ip.Equal(endIP) && len(newAddrs) < max; ip = utils.IncrementIP(ip) {
 		ok := q.leaseCache.IsIPAvailable(ip)
 		if !ok { // Doesnt exist in leases
-			slog.Debug("IP avail")
 			newAddrs = append(newAddrs, ip)
 		}
 	}

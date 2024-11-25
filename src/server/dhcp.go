@@ -66,7 +66,11 @@ func (s *Server) processRequest(dhcpLayer *layers.DHCPv4) error {
 
 	oldIP := s.lease.IsMACLeased(clientMAC) 
 	if oldIP != nil {
-		slog.Debug("Client has a leased addr", "oldip", oldIP.String())
+		slog.Debug("Client has a leased addr, renewing...", "oldip", oldIP.String())
+		err := s.lease.LeaseIP(oldIP, clientMAC, s.config.DHCP.LeaseLen)
+		if err != nil {
+			return fmt.Errorf("unable to create lease for requested ip: %w", err)
+		}
 		requestedIP = oldIP
 	} else {
 		requestedIPOpt, ok := utils.GetDHCPOption(&dhcpLayer.Options, layers.DHCPOptRequestIP)

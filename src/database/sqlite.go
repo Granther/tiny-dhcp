@@ -74,11 +74,8 @@ func (s *SQLiteManager) IsIPAvailable(ip net.IP) bool {
 	query := "SELECT ip, lease_len, leased_on FROM leases WHERE ip = ?;"
 	err := s.db.QueryRow(query, ip.String()).Scan(&lease.IP, &lease.LeaseLen, &lease.LeasedOn)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			slog.Debug("No lease found for that IP", "ip", ip.String())
-			return true
-		}
-		return false
+		return err == sql.ErrNoRows
+			// slog.Debug("No lease found for that IP", "ip", ip.String())
 	}
 
 	if utils.IsExpired(lease.LeaseLen, lease.LeasedOn) {
@@ -94,7 +91,7 @@ func (s *SQLiteManager) IsMACLeased(mac net.HardwareAddr) net.IP {
 	err := s.db.QueryRow(query, mac.String()).Scan(&lease.IP, &lease.MAC, &lease.LeaseLen, &lease.LeasedOn)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			slog.Debug("MAC does not have a lease")
+			// slog.Debug("MAC does not have a lease")
 			return nil
 		}
 		// Actual error return
@@ -103,12 +100,12 @@ func (s *SQLiteManager) IsMACLeased(mac net.HardwareAddr) net.IP {
 	}
 
 	if utils.IsExpired(lease.LeaseLen, lease.LeasedOn) {
-		slog.Debug("Mac was leased, but is expired")
+		// slog.Debug("Mac was leased, but is expired")
 		return nil
 	}
 
 	ip := net.ParseIP(lease.IP)
-	slog.Debug("Mac had lease", "ip", ip)
+	// slog.Debug("Mac had lease", "ip", ip)
 	return ip
 }
 
