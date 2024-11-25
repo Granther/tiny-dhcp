@@ -40,7 +40,7 @@ func NewNetworkManager(workerPool worker.WorkerPoolHandler, config *config.Confi
 	var err error
 
 	ifaceName := config.Server.ListenInterface
-	if ifaceName == "any" {
+	if ifaceName == "any" { // If 'any' is specified for the interface in the server config
 		slog.Debug("Using 'any' interface")
 		ifaces, err := net.Interfaces()
 		if err != nil {
@@ -48,16 +48,9 @@ func NewNetworkManager(workerPool worker.WorkerPoolHandler, config *config.Confi
 		}
 		for _, ifc := range ifaces {
 			ip, _ := utils.GetInterfaceIP(&ifc)
-			fmt.Println("Ip: ", ip.String())
-			// fmt.Println(ip.Equal(net.ParseIP("127.0.0.1")))
-			// if ip.Equal(net.ParseIP("127.0.0.1")) {
-			// 	fmt.Println("Is local")
-			// } else if ip == nil {
-			// 	fmt.Println("ip nil")
-			// }
-			if ip != nil && !ip.Equal(net.ParseIP("127.0.0.1")) {
+			if ip != nil && !ip.Equal(net.ParseIP("127.0.0.1")) { // Has address and that address is not loopback
 				iface = &ifc
-				slog.Debug("Using interface", "iface", )
+				slog.Debug("Using interface", "iface", iface.Name)
 				break
 			}
 		}
