@@ -50,7 +50,12 @@ func NewNetworkManager(workerPool worker.WorkerPoolHandler, config *config.Confi
 			ip, _ := utils.GetInterfaceIP(&ifc)
 			if ip != nil && !ip.Equal(net.ParseIP("127.0.0.1")) { // Has address and that address is not loopback
 				iface = &ifc
-				slog.Debug("Using interface", "iface", iface.Name)
+
+				ip, err := utils.GetInterfaceIP(iface)
+				if err != nil {
+					return nil, fmt.Errorf("failed to retrieve server ip for logging: %w", err)
+				}
+				slog.Debug("Using interface", "iface", iface.Name, "server ip", ip.String())
 				break
 			}
 		}
