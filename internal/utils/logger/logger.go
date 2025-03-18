@@ -2,11 +2,13 @@ package logger
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"log/slog"
 	"slices"
 )
 
-func CreateLogger(logLevel, logPath string, std bool) error {
+func CreateLogger(logLevel, logsPath string, std bool) error {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,
 		"info":  slog.LevelInfo,
@@ -21,13 +23,19 @@ func CreateLogger(logLevel, logPath string, std bool) error {
 	}
 
 	var logger *slog.Logger
-	if std { // Log to os.Stderr
-		logger := slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
+	if !std { // Log to os.Stderr
+		f, err := openLogsFile(fmt.Sprintf("%s/%s.log", logsPath, logLevel))
+		if err != nil { return fmt.Errorf("opening logs file: %w", err) } 
+		logger = slog.New(slog.NewTextHandler(f, handlerOpts))
 	} else { // Log to file
-		logger := slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
+		logger = slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
 	}
 	slog.SetDefault(logger) // Set global slog logger
 
 	return nil
+}
+
+func openLogsFile(path string) (io.Writer, error) {
+	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 }
 

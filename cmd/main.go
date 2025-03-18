@@ -1,25 +1,22 @@
 package main
 
 import (
-	"log/slog"
-	"os"
-
 	"gdhcp/internal/config"
 	"gdhcp/internal/utils/logger"
 	"gdhcp/internal/server"
-	"gdhcp/internal/pkg/errors"
+	"gdhcp/pkg/errors"
 )
 
 func main() {
-	jsonConfig := config.NewJSONConfigManager(".")
+	jsonConfig := config.NewJSONConfigManager("configs")
 	config, err := jsonConfig.ReadConfig()
-	errors.CheckErrorMsg("Error parsing config file", err)
+	errors.ExitErrorMsg("parsing config file", err)
 
-	err = CreateLogger(config.Server.LogLevel)
-	errors.CheckErrorMsg("Error creating logger", err)
+	err = logger.CreateLogger(config.Server.LogLevel, config.Server.LogsPath, config.Server.StderrLogs)
+	errors.ExitErrorMsg("creating logger", err)
 
 	server, err := server.NewServer(&config)
-	errors.CheckErrorMsg("Error occured while instantiating server", err)
+	errors.ExitErrorMsg("instantiating server", err)
 	
 	server.Start()
 }

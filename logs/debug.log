@@ -1,0 +1,11 @@
+time=2025-03-18T04:18:05.733Z level=DEBUG msg="Using 'any' interface"
+time=2025-03-18T04:18:05.734Z level=DEBUG msg="Using interface" iface=eth0 "server ip"=192.168.95.123
+time=2025-03-18T04:18:05.734Z level=ERROR msg="instantiating server" error="failed to create network module for server instantiation: failed to create server udp listener on 0.0.0.0: listen udp 0.0.0.0:67: bind: permission denied"
+time=2025-03-18T04:22:20.466Z level=DEBUG msg="Using 'any' interface"
+time=2025-03-18T04:22:20.466Z level=DEBUG msg="Using interface" iface=eth0 "server ip"=192.168.95.123
+time=2025-03-18T04:22:45.646Z level=DEBUG msg="Using 'any' interface"
+time=2025-03-18T04:22:45.646Z level=DEBUG msg="Using interface" iface=eth0 "server ip"=192.168.95.123
+time=2025-03-18T04:23:10.282Z level=DEBUG msg="Using 'any' interface"
+time=2025-03-18T04:23:10.282Z level=DEBUG msg="Using interface" iface=eth0 "server ip"=192.168.95.123
+time=2025-03-18T05:24:58.986Z level=DEBUG msg="Using 'any' interface"
+time=2025-03-18T05:24:58.986Z level=DEBUG msg="Using interface" iface=eth0 "server ip"=192.168.95.123
