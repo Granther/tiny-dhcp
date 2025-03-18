@@ -1,8 +1,8 @@
 package main
 
 import (
-	"gdhcp/config"
-	"gdhcp/server"
+	"gdhcp/internal/config"
+	"gdhcp/internal/server"
 	"log/slog"
 	"os"
 )

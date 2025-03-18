@@ -2,9 +2,10 @@ package database
 
 import (
 	"database/sql"
-	"gdhcp/types"
 	"net"
 	"time"
+
+	"gdhcp/internal/types"
 )
 type PersistentHandler interface {
 	Connect() error

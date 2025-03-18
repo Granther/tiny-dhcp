@@ -9,8 +9,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"gdhcp/types"
-	"gdhcp/utils"
+	"gdhcp/internal/types"
+	"gdhcp/internal/utils"
 )
 
 type SQLiteManager struct {

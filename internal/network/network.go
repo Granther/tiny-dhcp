@@ -2,13 +2,14 @@ package network
 
 import (
 	"fmt"
-	"gdhcp/config"
-	"gdhcp/utils"
-	"gdhcp/worker"
 	"log/slog"
 	"net"
 
 	"github.com/google/gopacket/pcap"
+
+	"gdhcp/internal/config"
+	"gdhcp/internal/utils"
+	"gdhcp/internal/worker"
 )
 
 type NetworkHandler interface {

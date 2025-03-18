@@ -8,13 +8,13 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 
-	"gdhcp/cache"
-	"gdhcp/config"
-	"gdhcp/database"
-	"gdhcp/network"
-	"gdhcp/options"
-	"gdhcp/utils"
-	"gdhcp/worker"
+	"gdhcp/internal/cache"
+	"gdhcp/internal/config"
+	"gdhcp/internal/database"
+	"gdhcp/internal/network"
+	"gdhcp/internal/options"
+	"gdhcp/internal/utils"
+	"gdhcp/internal/worker"
 )
 
 type Server struct {

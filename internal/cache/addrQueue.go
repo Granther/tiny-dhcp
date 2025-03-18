@@ -2,9 +2,10 @@ package cache
 
 import (
 	"fmt"
-	"gdhcp/utils"
 	"log/slog"
 	"net"
+
+	"gdhcp/internal/utils"
 )
 
 type AddrQueueHandler interface {

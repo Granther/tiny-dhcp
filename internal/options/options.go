@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/gopacket/layers"
 
-	"gdhcp/config"
+	"gdhcp/internal/config"
 )
 
 // Options handler impl only has to impl CreateOptionsMap

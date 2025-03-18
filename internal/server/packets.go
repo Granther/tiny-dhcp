@@ -2,12 +2,13 @@ package server
 
 import (
 	"fmt"
-	"gdhcp/utils"
 	"log/slog"
 	"net"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+
+	"gdhcp/internal/utils"
 )
 
 func (s *Server) buildStdPacket(dstIP net.IP, dstMAC net.HardwareAddr, dhcpLayer *layers.DHCPv4) (*gopacket.SerializeBuffer, error) {

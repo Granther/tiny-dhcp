@@ -2,11 +2,12 @@ package cache
 
 import (
 	"fmt"
-	"gdhcp/database"
-	"gdhcp/types"
-	"gdhcp/utils"
 	"net"
 	"time"
+
+	"gdhcp/internal/database"
+	"gdhcp/internal/types"
+	"gdhcp/internal/utils"
 )
 
 // Have a queue of available addrs

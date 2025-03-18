@@ -8,7 +8,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 
-	"gdhcp/utils"
+	"gdhcp/internal/utils"
 )
 
 func (s *Server) readRequestList(layer *layers.DHCPv4, msgType layers.DHCPMsgType) (*layers.DHCPOptions, bool) {

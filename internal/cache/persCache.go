@@ -2,12 +2,13 @@ package cache
 
 import (
 	"fmt"
-	"gdhcp/database"
-	"gdhcp/types"
-	"gdhcp/utils"
 	"log/slog"
 	"net"
 	"time"
+
+	"gdhcp/internal/database"
+	"gdhcp/internal/types"
+	"gdhcp/internal/utils"
 )
 
 type PersistentCache struct {
