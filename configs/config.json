@@ -3,7 +3,9 @@
         "port": 67,
         "listenInterface": "any",
         "numWorkers": 10,
-        "logLevel": "debug"
+        "logLevel": "debug",
+	"logsPath": "logs/",
+	"stderrLogs": true
     },
     "dhcp": {
         "networkAddr": "192.168.1.0/24",

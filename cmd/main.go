@@ -1,40 +1,25 @@
 package main
 
 import (
-	"gdhcp/internal/config"
-	"gdhcp/internal/server"
 	"log/slog"
 	"os"
+
+	"gdhcp/internal/config"
+	"gdhcp/internal/utils/logger"
+	"gdhcp/internal/server"
+	"gdhcp/internal/pkg/errors"
 )
-
-func CreateLogger(logLevel string) {
-	levels := map[string]slog.Level{
-		"debug": slog.LevelDebug,
-		"info":  slog.LevelInfo,
-	}
-
-	handlerOpts := &slog.HandlerOptions{
-		Level: levels[logLevel],
-	}
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr, handlerOpts))
-	slog.SetDefault(logger)
-}
 
 func main() {
 	jsonConfig := config.NewJSONConfigManager(".")
 	config, err := jsonConfig.ReadConfig()
-	if err != nil {
-		slog.Error("Error parsing config file", "error", err)
-		os.Exit(1)
-	}
+	errors.CheckErrorMsg("Error parsing config file", err)
 
-	CreateLogger(config.Server.LogLevel)
+	err = CreateLogger(config.Server.LogLevel)
+	errors.CheckErrorMsg("Error creating logger", err)
 
 	server, err := server.NewServer(&config)
-	if err != nil {
-		slog.Error("Error occured while instantiating server", "error", err)
-		os.Exit(1)
-	}
+	errors.CheckErrorMsg("Error occured while instantiating server", err)
+	
 	server.Start()
 }

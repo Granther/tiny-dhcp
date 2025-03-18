@@ -43,6 +43,8 @@ type Server struct {
 	ListenInterface string `json:"listenInterface"`
 	NumWorkers      int    `json:"numWorkers"`
 	LogLevel        string `json:"logLevel"`
+	LogsPath	string `json:"logsPath"`
+	StderrLogs	bool `json:"stderrLogs"`
 }
 
 type Config struct {
