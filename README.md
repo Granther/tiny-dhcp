@@ -1,6 +1,6 @@
 <a id="readme-top"></a>
 <br />
-<h2 align="center"><h4>*tiny*</h4>-DHCP</h2>
+<h2 align="center">tiny-DHCP</h2>
   <p align="center">
     A cute, small, simple DHCP Server written from scratch (no DHCP packages) in Go
     <br />
@@ -23,12 +23,12 @@ Well, I, a 19 year old unemployed nerd wrote this. Although I am confident, it m
 ## Installation
 ### Prerequisites
 * An ARM or x86 machine with a network adapter (pretty much any computer)
-* Golang xxx installed
+* Golang >=1.21
 
 ### Building
 1. Clone this repo down and enter root directory
 ```
-git clone
+git clone https://github.com/Granther/tiny-dhcp
 cd tiny-dhcp
 ```
 2. Build!
