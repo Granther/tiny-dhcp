@@ -1,15 +1,41 @@
-# Tiny DHCP
-- A cute little DHCP server written from scratch (no dhcp packages) in Go
+<a id="readme-top"></a>
+<br />
+<h2 align="center"><h4>*tiny*</h4>-DHCP</h2>
+  <p align="center">
+    A cute, small, simple DHCP Server written from scratch (no DHCP packages) in Go
+    <br />
+  </p>
+</div>
+
+## About The Project
+Its a small DHCP server, small as in:
+* Minimal memory/disk footprint
+* Fast startup, running & shutdown
+* Utilizing Golang's core features for concurrency and speed
+
+### Uses
+Well, I, a 19 year old unemployed nerd wrote this. Although I am confident, it may have bugs that make mission critical deployments a problem. It wasn't written for environments with a high number of devices, running this at home is a great option
 
 ### Why?
-- This was a learning experience, I had never written anything in Go nor had I ever written a server.
-- I wanted to host a dedicated DHCP server in my homelab, I realize there are not many homelab friendly projects that allow me to do this
+- Mainly for the learning experience. Implementing a rock solid protocol from scratch while using Go has been a blast
+- I also wanted to host a dedicated DHCP server in my homelab, only to realize there are not many homelab friendly projects that allow me to do this
 
-### Why is it Tiny?
-- Well, it doesn't do any fancy vendor specific stuff
+## Installation
+### Prerequisites
+* An ARM or x86 machine with a network adapter (pretty much any computer)
+* Golang xxx installed
 
-### RCFC?
-- Nope, I'm not writing the server in complete accordance with RCFC's DHCP docs 
+### Building
+1. Clone this repo down and enter root directory
+```
+git clone
+cd tiny-dhcp
+```
+2. Build!
+```
+# For x86
+make build
 
-### The Low Down
-- The server uses a Worker pool to accept and send.
+# For Arm (raspberry pi, etc)
+make build_arm
+```
