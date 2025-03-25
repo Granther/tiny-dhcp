@@ -107,7 +107,7 @@ func (s *Server) HandleDHCPPacket(packetSlice []byte) error {
 
 	switch message, _ := utils.GetMessageTypeOption(&dhcpLayer.Options); message {
 	case layers.DHCPMsgTypeDiscover:
-		slog.Debug("Got Discover")
+		slog.Debug("Got Discover, Moves from Init -> Selecting")
 		err := s.createOffer(dhcpLayer)
 		if err != nil {
 			return fmt.Errorf("error creating offer: %v", err)
@@ -139,12 +139,20 @@ func (s *Server) HandleDHCPPacket(packetSlice []byte) error {
 	case layers.DHCPMsgTypeOffer:
 		slog.Debug("Got Offer")
 	case layers.DHCPMsgTypeAck:
-		log.Printf("Got Ack")
+		slog.Debug("Got Ack")
 	case layers.DHCPMsgTypeNak:
-		log.Printf("Got Nak")
+		slog.Debug("Got Nak")
 	case layers.DHCPMsgTypeUnspecified:
-		log.Printf("Error, DHCP operation type is unspecified")
+		slog.Error("DHCP operation type is unspecified")
 	}
 
 	return nil
 }
+
+/*
+Server
+Listening (waiting) (gets discover) -> Deciding (send offer, enters submitting if request for offer recieved, otherwise not) -> Submitting (send ack) || Ending (gets nack, exit back to listening)
+
+Client 
+Init (sends discover) (enters selecint when offer recieved) -> Selecting (gets offer) (sends request if it likes it) -> Requesting (sends request for offered ip) (binds ip if gets ack) -> Bind 
+*/
