@@ -107,10 +107,11 @@ func (s *Server) HandleDHCPPacket(packetSlice []byte) error {
 
 	switch message, _ := utils.GetMessageTypeOption(&dhcpLayer.Options); message {
 	case layers.DHCPMsgTypeDiscover:
-		slog.Debug("Got Discover, Moves from Init -> Selecting")
-		err := s.createOffer(dhcpLayer)
+		slog.Debug("Got Discover, Moves from Listening -> Deciding")
+		//err := s.createOffer(dhcpLayer)
+		err := s.enterDeciding(dhcpLayer)
 		if err != nil {
-			return fmt.Errorf("error creating offer: %v", err)
+			return fmt.Errorf("error enter deciding state after Discover: %v", err)
 		}
 	case layers.DHCPMsgTypeRequest:
 		slog.Debug("Got Request")
